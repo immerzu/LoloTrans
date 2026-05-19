@@ -2,6 +2,10 @@
 
 LoloTrans ist eine Android-Übersetzungs-App mit Floating-Bubble, automatischer Quellspracherkennung und On-Device-Übersetzung per ML Kit.
 
+## Lizenz
+
+Apache License 2.0
+
 ## Autor
 
 immerzu
