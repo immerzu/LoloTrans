@@ -159,6 +159,10 @@ class FloatingBubbleService : Service() {
         bubbleIcon?.layoutParams = FrameLayout.LayoutParams(visualPx, visualPx).apply {
             gravity = Gravity.CENTER
         }
+
+        // Nach Größenwechsel Position neu begrenzen
+        clampBubblePosition()
+        Log.d(TAG, "Size changed, reclamped position x=${bubbleParams?.x}")
     }
 
     // ──────────────────────────────────────────────
@@ -231,9 +235,10 @@ class FloatingBubbleService : Service() {
             y = posY
         }
 
+        clampBubblePosition()
+        Log.d(TAG, "Bubble start position: loaded=($posX,$posY) clamped=(${bubbleParams?.x},${bubbleParams?.y})")
         windowManager.addView(bubbleView, bubbleParams)
         isBubbleAttached = true
-        Log.d(TAG, "Bubble erstellt: ${size.name} touch=${touchPx}px visual=${visualPx}px an ($posX,$posY)")
     }
 
     private fun removeBubble() {
@@ -278,10 +283,11 @@ class FloatingBubbleService : Service() {
                     showTrashOverlay()
                 }
                 if (isDragging) {
-                    val newX = initialX + dx.toInt()
-                    val newY = initialY + dy.toInt()
-                    bubbleParams?.x = newX
-                    bubbleParams?.y = newY
+                    val rawX = initialX + dx.toInt()
+                    val rawY = initialY + dy.toInt()
+                    bubbleParams?.x = rawX
+                    bubbleParams?.y = rawY
+                    clampBubblePosition()
                     bubbleView?.let { windowManager.updateViewLayout(it, bubbleParams) }
 
                     // Hover-Hervorhebung: etwas großzügiger für optisches Feedback
@@ -518,6 +524,40 @@ class FloatingBubbleService : Service() {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         )
         .build()
+
+    /**
+     * Begrenzt bubbleParams.x/y so, dass das sichtbare Symbol bis an den Bildschirmrand
+     * geschoben werden kann. Die unsichtbare Touchfläche darf dabei teilweise
+     * außerhalb des Bildschirms liegen (negative X-Werte erlaubt).
+     */
+    private fun clampBubblePosition() {
+        val params = bubbleParams ?: return
+        val touchPx = params.width
+        if (touchPx <= 0) return
+
+        val visualPx = dpToPx(currentBubbleSize.visualDp)
+        val sideInset = ((touchPx - visualPx) / 2).coerceAtLeast(0)
+
+        val metrics = resources.displayMetrics
+        val screenW = metrics.widthPixels
+        val screenH = metrics.heightPixels
+
+        val minX = -sideInset
+        val maxX = screenW - touchPx + sideInset
+        val minY = -sideInset
+        val maxY = screenH - touchPx + sideInset
+
+        val oldX = params.x
+        val oldY = params.y
+        params.x = params.x.coerceIn(minX, maxX)
+        params.y = params.y.coerceIn(minY, maxY)
+
+        if (oldX != params.x || oldY != params.y) {
+            Log.d(TAG, "Bubble clamp: touchPx=$touchPx visualPx=$visualPx " +
+                "sideInset=$sideInset minX=$minX maxX=$maxX " +
+                "old=($oldX,$oldY) clamped=(${params.x},${params.y})")
+        }
+    }
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 }
