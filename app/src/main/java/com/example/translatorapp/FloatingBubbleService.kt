@@ -1,0 +1,523 @@
+package com.example.translatorapp
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.IBinder
+import android.provider.Settings
+import android.util.Log
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+
+private const val TAG = "FloatingBubble"
+
+class FloatingBubbleService : Service() {
+
+    private lateinit var windowManager: WindowManager
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var translationManager: TranslationManager
+    private lateinit var overlayManager: TranslationOverlayManager
+
+    // Bubble
+    private var bubbleContainer: ViewGroup? = null
+    private var bubbleView: View? = null
+    private var bubbleParams: WindowManager.LayoutParams? = null
+    private var bubbleCircle: View? = null
+    private var bubbleIcon: ImageView? = null
+    private var isBubbleAttached = false
+    private var currentBubbleSize = BubbleSize.M
+
+    // Trash
+    private var trashView: View? = null
+    private var trashParams: WindowManager.LayoutParams? = null
+    private var isTrashAttached = false
+    private var trashHighlighted = false
+    private val trashBgNormal = 0x99000000.toInt()     // halbtransparent schwarz
+    private val trashBgHighlight = 0xCCD32F2F.toInt()  // rötlich hervorgehoben
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // Drag / Tap
+    private var initialX = 0
+    private var initialY = 0
+    private var initialTouchX = 0f
+    private var initialTouchY = 0f
+    private var lastRawX = 0f
+    private var lastRawY = 0f
+    private var isDragging = false
+    private var touchSlop = 0
+
+    companion object {
+        private const val NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = "translation_bubble_channel"
+        private const val TRASH_SIZE_DP = 140
+        private const val TRASH_HIT_TOLERANCE_DP = 10   // präzise, nur sanfte Hilfe
+        private const val TRASH_HOVER_TOLERANCE_DP = 16 // optische Hervorhebung etwas früher
+    }
+
+    // ──────────────────────────────────────────────
+    //  Lifecycle
+    // ──────────────────────────────────────────────
+
+    override fun onCreate() {
+        super.onCreate()
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        settingsRepository = SettingsRepository(this)
+        translationManager = TranslationManager()
+        overlayManager = TranslationOverlayManager(this, windowManager, settingsRepository)
+        touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        Log.d(TAG, "touchSlop=$touchSlop (System)")
+        createNotificationChannel()
+        startBubbleSizeObserver()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, buildNotification())
+        showBubble()
+        return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        // bubbleEnabled=false muss VOR serviceScope.cancel() gespeichert werden,
+        // sonst verliert die MainActivity den korrekten Zustand.
+        runBlocking {
+            settingsRepository.setBubbleEnabled(false)
+        }
+        Log.d(TAG, "onDestroy: bubbleEnabled=false gespeichert")
+        removeBubble()
+        hideTrashOverlay()
+        overlayManager.destroy()
+        translationManager.close()
+        serviceScope.cancel()
+        Log.d(TAG, "Bubble service destroyed")
+        super.onDestroy()
+    }
+
+    // ──────────────────────────────────────────────
+    //  Live-Größenbeobachtung
+    // ──────────────────────────────────────────────
+
+    private fun startBubbleSizeObserver() {
+        serviceScope.launch {
+            settingsRepository.bubbleSize.collectLatest { newSize ->
+                Log.d(TAG, "BubbleSize aus DataStore: ${newSize.name} (touch=${newSize.touchDp} visual=${newSize.visualDp})")
+                if (newSize == currentBubbleSize) return@collectLatest
+                currentBubbleSize = newSize
+                if (isBubbleAttached) {
+                    applyBubbleSize(newSize)
+                }
+            }
+        }
+    }
+
+    private fun applyBubbleSize(size: BubbleSize) {
+        val touchPx = dpToPx(size.touchDp)
+        val visualPx = dpToPx(size.visualDp)
+        val iconPx = dpToPx(size.iconDp)
+        Log.d(TAG, "applyBubbleSize: ${size.name} touch=${touchPx}px visual=${visualPx}px icon=${iconPx}px")
+
+        // WindowManager-Größe = Touchfläche
+        bubbleParams?.width = touchPx
+        bubbleParams?.height = touchPx
+        bubbleView?.let { view ->
+            try {
+                windowManager.updateViewLayout(view, bubbleParams)
+            } catch (e: Exception) {
+                Log.e(TAG, "updateViewLayout fehlgeschlagen", e)
+            }
+        }
+
+        // Sichtbarer Button (PNG) zentriert in Touchfläche
+        bubbleIcon?.layoutParams = FrameLayout.LayoutParams(visualPx, visualPx).apply {
+            gravity = Gravity.CENTER
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    //  Bubble anzeigen / entfernen
+    // ──────────────────────────────────────────────
+
+    private fun showBubble() {
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
+            stopSelf()
+            return
+        }
+        if (isBubbleAttached) return
+
+        serviceScope.launch {
+            try {
+                val size = settingsRepository.bubbleSize.first()
+                val posX = settingsRepository.getBubblePosX()
+                val posY = settingsRepository.getBubblePosY()
+                createBubbleView(size, posX, posY)
+            } catch (e: Exception) {
+                createBubbleView(BubbleSize.M, 100, 200)
+            }
+        }
+    }
+
+    private fun createBubbleView(size: BubbleSize, posX: Int, posY: Int) {
+        if (isBubbleAttached) return
+        currentBubbleSize = size
+        val touchPx = dpToPx(size.touchDp)
+        val visualPx = dpToPx(size.visualDp)
+        val iconPx = dpToPx(size.iconDp)
+
+        // Root-Layout = Touchfläche (vollständig unsichtbar)
+        val root = FrameLayout(this).apply {
+            id = View.generateViewId()
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        }
+        bubbleContainer = root
+
+        // Overlay_Button_SW.png – weiße Pixel zur Laufzeit transparent machen
+        val icon = ImageView(this).apply {
+            setImageResource(R.drawable.overlay_button_sw)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        }
+        root.addView(icon, FrameLayout.LayoutParams(visualPx, visualPx).apply {
+            gravity = Gravity.CENTER
+        })
+        bubbleIcon = icon
+
+        bubbleView = root
+        // OnClickListener für korrekte Tap-Erkennung + Accessibility
+        bubbleView!!.setOnClickListener {
+            Log.d(TAG, "Bubble OnClick ausgelöst → handleBubbleClick")
+            handleBubbleClick()
+        }
+        bubbleView!!.setOnTouchListener { v, event -> handleBubbleTouch(v, event) }
+
+        bubbleParams = WindowManager.LayoutParams(
+            touchPx,
+            touchPx,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = posX
+            y = posY
+        }
+
+        windowManager.addView(bubbleView, bubbleParams)
+        isBubbleAttached = true
+        Log.d(TAG, "Bubble erstellt: ${size.name} touch=${touchPx}px visual=${visualPx}px an ($posX,$posY)")
+    }
+
+    private fun removeBubble() {
+        if (isBubbleAttached && bubbleView != null) {
+            try { windowManager.removeView(bubbleView) } catch (_: Exception) {}
+            bubbleView = null
+            bubbleContainer = null
+            bubbleParams = null
+            bubbleCircle = null
+            bubbleIcon = null
+            isBubbleAttached = false
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    //  Touch / Drag / Trash
+    // ──────────────────────────────────────────────
+
+    private fun handleBubbleTouch(v: View, event: MotionEvent): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                Log.d(TAG, "ACTION_DOWN raw=(${event.rawX},${event.rawY})")
+                initialX = bubbleParams?.x ?: 0
+                initialY = bubbleParams?.y ?: 0
+                initialTouchX = event.rawX
+                initialTouchY = event.rawY
+                lastRawX = event.rawX
+                lastRawY = event.rawY
+                isDragging = false
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.rawX - initialTouchX
+                val dy = event.rawY - initialTouchY
+                val distance = Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+                lastRawX = event.rawX
+                lastRawY = event.rawY
+
+                if (!isDragging && distance > touchSlop) {
+                    isDragging = true
+                    Log.d(TAG, "Drag gestartet distance=$distance touchSlop=$touchSlop")
+                    showTrashOverlay()
+                }
+                if (isDragging) {
+                    val newX = initialX + dx.toInt()
+                    val newY = initialY + dy.toInt()
+                    bubbleParams?.x = newX
+                    bubbleParams?.y = newY
+                    bubbleView?.let { windowManager.updateViewLayout(it, bubbleParams) }
+
+                    // Hover-Hervorhebung: etwas großzügiger für optisches Feedback
+                    val hover = isBubbleCenterOverTrash(TRASH_HOVER_TOLERANCE_DP)
+                    if (hover != trashHighlighted) {
+                        trashHighlighted = hover
+                        updateTrashAppearance(hover)
+                        Log.d(TAG, "Trash hover changed: $hover")
+                    }
+                }
+                return true
+            }
+
+            // ACTION_UP und ACTION_CANCEL gleich behandeln
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val dx = event.rawX - initialTouchX
+                val dy = event.rawY - initialTouchY
+                val distance = Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+                val isTap = !isDragging && distance <= touchSlop * 1.5f
+                Log.d(TAG, "ACTION_UP distance=$distance isDragging=$isDragging isTap=$isTap")
+
+                // ── Tap ──
+                if (isTap) {
+                    hideTrashOverlay()
+                    isDragging = false
+                    Toast.makeText(this, R.string.translating_clipboard, Toast.LENGTH_SHORT).show()
+                    v.performClick()
+                    return true
+                }
+
+                // ── Drag ──
+                if (isDragging) {
+                    // Präziser Hit-Test VOR hideTrashOverlay(), nur Bubble-Mittelpunkt
+                    val overTrash = isBubbleCenterOverTrash(TRASH_HIT_TOLERANCE_DP)
+                    Log.d(TAG, "ACTION_UP final preciseOverTrash=$overTrash")
+
+                    if (overTrash) {
+                        Log.d(TAG, "Drop im Trash → stopSelf()")
+                        hideTrashOverlay()
+                        isDragging = false
+                        stopSelf()
+                        return true
+                    }
+
+                    Log.d(TAG, "Drop außerhalb Trash → Bubble bleibt sichtbar")
+                    hideTrashOverlay()
+                    serviceScope.launch {
+                        settingsRepository.saveBubblePosition(
+                            bubbleParams?.x ?: initialX,
+                            bubbleParams?.y ?: initialY
+                        )
+                    }
+                    isDragging = false
+                    return true
+                }
+
+                // Weder Tap noch Drag
+                hideTrashOverlay()
+                isDragging = false
+                Log.d(TAG, "ACTION_UP: weder Tap noch Drag → ignoriert")
+                return true
+            }
+        }
+        return false
+    }
+
+    // ──────────────────────────────────────────────
+    //  Trash-Overlay
+    // ──────────────────────────────────────────────
+
+    private fun showTrashOverlay() {
+        if (isTrashAttached) {
+            updateTrashAppearance(false)
+            return
+        }
+
+        val sizePx = dpToPx(TRASH_SIZE_DP)
+        val container = FrameLayout(this).apply { id = View.generateViewId() }
+
+        // Halbtransparenter runder Hintergrund
+        val bg = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dpToPx(24).toFloat()
+                setColor(trashBgNormal)
+            }
+        }
+        container.addView(bg, FrameLayout.LayoutParams(sizePx, sizePx))
+
+        // Inhalt: Icon + Text
+        val inner = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        // Mülleimer-Symbol (Unicode)
+        val iconTv = TextView(this).apply {
+            text = "🗑️"
+            textSize = 28f
+            gravity = Gravity.CENTER
+        }
+        inner.addView(iconTv)
+        val hintTv = TextView(this).apply {
+            text = getString(R.string.trash_hint)
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+        }
+        inner.addView(hintTv)
+
+        container.addView(inner, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.CENTER })
+
+        trashView = container
+        trashHighlighted = false
+
+        // Auf Bildschirmgröße reagieren
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+
+        trashParams = WindowManager.LayoutParams(
+            sizePx,
+            sizePx,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            x = 0
+            y = dpToPx(40) // Abstand vom unteren Rand
+        }
+
+        windowManager.addView(trashView, trashParams)
+        isTrashAttached = true
+        Log.d(TAG, "Trash angezeigt")
+    }
+
+    private fun updateTrashAppearance(highlighted: Boolean) {
+        val bg = (trashView as? ViewGroup)?.getChildAt(0) ?: return
+        val drawable = bg.background as? GradientDrawable ?: return
+        drawable.setColor(if (highlighted) trashBgHighlight else trashBgNormal)
+    }
+
+    private fun hideTrashOverlay() {
+        if (isTrashAttached && trashView != null) {
+            try { windowManager.removeView(trashView) } catch (_: Exception) {}
+            trashView = null
+            trashParams = null
+            isTrashAttached = false
+            trashHighlighted = false
+            Log.d(TAG, "Trash entfernt")
+        }
+    }
+
+    /**
+     * Präziser Hit-Test: Nur Bubble-Mittelpunkt gegen Trash-Bounds.
+     * @param toleranceDp zusätzlicher Spielraum in dp (10dp final, 16dp Hover)
+     */
+    private fun isBubbleCenterOverTrash(toleranceDp: Int): Boolean {
+        val bubble = bubbleView ?: return false
+        val trash = trashView ?: return false
+        if (!isTrashAttached || !isBubbleAttached) return false
+
+        val bubbleLoc = IntArray(2)
+        val trashLoc = IntArray(2)
+        bubble.getLocationOnScreen(bubbleLoc)
+        trash.getLocationOnScreen(trashLoc)
+
+        val bubbleCenterX = bubbleLoc[0] + bubble.width / 2
+        val bubbleCenterY = bubbleLoc[1] + bubble.height / 2
+
+        val tolerance = dpToPx(toleranceDp)
+        val hitLeft = trashLoc[0] - tolerance
+        val hitTop = trashLoc[1] - tolerance
+        val hitRight = trashLoc[0] + trash.width + tolerance
+        val hitBottom = trashLoc[1] + trash.height + tolerance
+
+        val result = bubbleCenterX in hitLeft..hitRight &&
+                bubbleCenterY in hitTop..hitBottom
+
+        Log.d(TAG, "HitTest precise: bubbleCenter=($bubbleCenterX,$bubbleCenterY) " +
+                "trash=($hitLeft,$hitTop,$hitRight,$hitBottom) tolerance=${tolerance}px result=$result")
+        return result
+    }
+
+    // ──────────────────────────────────────────────
+    //  Übersetzung
+    // ──────────────────────────────────────────────
+
+    /**
+     * Startet die transparente ClipboardTranslateActivity, die im Vordergrund
+     * zuverlässig die Zwischenablage liest und die Übersetzung durchführt.
+     * Der direkte Clipboard-Zugriff aus dem Service-Kontext ist ab Android 12+
+     * eingeschränkt und funktioniert nicht zuverlässig.
+     */
+    private fun handleBubbleClick() {
+        Log.d(TAG, "handleBubbleClick → starte ClipboardTranslateActivity")
+        val intent = Intent(this, ClipboardTranslateActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        }
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Fehler beim Starten der ClipboardTranslateActivity", e)
+            Toast.makeText(this, R.string.translation_error, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    //  Notification
+    // ──────────────────────────────────────────────
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_LOW
+            ).apply { description = getString(R.string.notification_channel_desc) }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+    }
+
+    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
+        .setContentTitle(getString(R.string.notification_title))
+        .setContentText(getString(R.string.notification_text))
+        .setSmallIcon(android.R.drawable.ic_menu_sort_alphabetically)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setContentIntent(
+            PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        )
+        .build()
+
+    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
+}

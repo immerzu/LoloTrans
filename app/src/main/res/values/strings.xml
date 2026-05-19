@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LoloTrans</string>
+
+    <!-- Hauptbildschirm -->
+    <string name="title">LoloTrans</string>
+    <string name="description">Tippe auf die sichtbare Bubble, um deinen kopierten Text übersetzen zu lassen.\n\nDiese App liest die Zwischenablage nicht heimlich im Hintergrund. Erst wenn du die Bubble antippst, wird der aktuelle Inhalt der Zwischenablage gelesen und übersetzt.</string>
+    <string name="privacy_notice">Die App übersetzt kopierten Text erst, wenn du aktiv auf die sichtbare Bubble tippst. Die Zwischenablage wird nicht dauerhaft im Hintergrund überwacht. Es werden keine Daten an externe Server gesendet – die Übersetzung erfolgt auf dem Gerät.</string>
+
+    <!-- Berechtigung -->
+    <string name="permission_status">Overlay-Berechtigung</string>
+    <string name="permission_granted">Berechtigung erteilt</string>
+    <string name="permission_denied">Berechtigung nicht erteilt</string>
+    <string name="grant_permission">Overlay-Berechtigung erteilen</string>
+    <string name="permission_required">Die Overlay-Berechtigung wird benötigt, um die Bubble über anderen Apps anzuzeigen.</string>
+
+    <!-- Sprache -->
+    <string name="target_language">Zielsprache</string>
+    <string name="source_language">Quellsprache</string>
+    <string name="auto_detect">Automatisch erkennen</string>
+
+    <!-- Bubble -->
+    <string name="bubble_size">Bubble-Größe</string>
+    <string name="bubble_size_xs">XS</string>
+    <string name="bubble_size_s">S</string>
+    <string name="bubble_size_m">M</string>
+    <string name="bubble_size_l">L</string>
+    <string name="bubble_size_xl">XL</string>
+    <string name="start_bubble">Bubble starten</string>
+    <string name="stop_bubble">Bubble stoppen</string>
+    <string name="bubble_active">Bubble ist aktiv</string>
+    <string name="bubble_inactive">Bubble ist inaktiv</string>
+
+    <!-- Overlay -->
+    <string name="copy_button">Kopieren</string>
+    <string name="close_button">Schließen</string>
+    <string name="retranslate_button">Neu übersetzen</string>
+    <string name="translation_copied">Übersetzung kopiert</string>
+    <string name="trash_hint">Loslassen zum Schließen</string>
+
+    <!-- Fehler -->
+    <string name="no_text_clipboard">Keine Text-Zwischenablage gefunden. Bitte Text kopieren und Bubble antippen.</string>
+    <string name="translating_clipboard">Übersetze Zwischenablage…</string>
+    <string name="translation_running">Übersetzung läuft…</string>
+    <string name="clipboard_test">Zwischenablage testen</string>
+    <string name="clipboard_test_result">Clipboard: %1$s</string>
+    <string name="translation_failed">Übersetzung fehlgeschlagen</string>
+    <string name="model_downloading">Sprachmodell wird heruntergeladen…</string>
+    <string name="model_download_failed">Sprachmodell konnte nicht geladen werden. Bitte Internetverbindung prüfen.</string>
+    <string name="translation_error">Fehler bei der Übersetzung</string>
+    <string name="same_language_warning">Quell- und Zielsprache sind identisch. Bitte andere Sprachkombination wählen.</string>
+    <string name="identifying_language">Sprache wird erkannt…</string>
+    <string name="identified_language">Erkannte Sprache: %1$s</string>
+    <string name="language_not_identified">Sprache konnte nicht erkannt werden. Bitte Quellsprache manuell wählen.</string>
+    <string name="language_not_supported">Erkannte Sprache (%1$s) wird nicht für Übersetzung unterstützt.</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">Translation Bubble</string>
+    <string name="notification_channel_desc">Zeigt an, dass die Übersetzungs-Bubble aktiv ist</string>
+    <string name="notification_title">LoloTrans</string>
+    <string name="notification_text">Übersetzungs-Bubble ist aktiv. Tippe sie an, um Text zu übersetzen.</string>
+
+    <!-- Sprachliste -->
+    <string name="lang_auto">Automatisch</string>
+    <string name="lang_en">Englisch</string>
+    <string name="lang_de">Deutsch</string>
+    <string name="lang_fr">Französisch</string>
+    <string name="lang_es">Spanisch</string>
+    <string name="lang_it">Italienisch</string>
+    <string name="lang_pt">Portugiesisch</string>
+    <string name="lang_nl">Niederländisch</string>
+    <string name="lang_pl">Polnisch</string>
+    <string name="lang_ru">Russisch</string>
+    <string name="lang_ja">Japanisch</string>
+    <string name="lang_ko">Koreanisch</string>
+    <string name="lang_zh">Chinesisch</string>
+    <string name="lang_ar">Arabisch</string>
+    <string name="lang_tr">Türkisch</string>
+    <string name="lang_hi">Hindi</string>
+    <string name="lang_th">Thailändisch</string>
+    <string name="lang_vi">Vietnamesisch</string>
+    <string name="lang_sv">Schwedisch</string>
+</resources>

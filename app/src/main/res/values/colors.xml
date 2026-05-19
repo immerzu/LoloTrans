@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#000000</color>
+    <color name="bubble_color">#222222</color>
+    <color name="overlay_background">#0A0A0A</color>
+    <color name="overlay_title_bar">#111111</color>
+</resources>

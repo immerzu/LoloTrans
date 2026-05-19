@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TranslatorApp" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+
+    <!-- Dialog-Activity als eigenständiges Fenster für Clipboard-Zugriff -->
+    <style name="Theme.TranslatorApp.Dialog" parent="android:Theme.Material.Light.Dialog.NoActionBar.MinWidth">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowCloseOnTouchOutside">false</item>
+        <item name="android:windowMinWidthMajor">80%</item>
+        <item name="android:windowMinWidthMinor">80%</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+</resources>
