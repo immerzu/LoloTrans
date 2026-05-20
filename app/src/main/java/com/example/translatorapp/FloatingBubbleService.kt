@@ -7,6 +7,8 @@ import android.app.Service
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -44,11 +46,12 @@ class FloatingBubbleService : Service() {
     private lateinit var translationManager: TranslationManager
     private lateinit var overlayManager: TranslationOverlayManager
 
+    // PNG-Alpha-Bounding-Box (einmalig analysiert, nie verändert)
+    private var pngAlphaBounds: PngAlphaBounds? = null
+
     // Bubble
-    private var bubbleContainer: ViewGroup? = null
     private var bubbleView: View? = null
     private var bubbleParams: WindowManager.LayoutParams? = null
-    private var bubbleCircle: View? = null
     private var bubbleIcon: ImageView? = null
     private var isBubbleAttached = false
     private var currentBubbleSize = BubbleSize.M
@@ -74,6 +77,7 @@ class FloatingBubbleService : Service() {
     private var touchSlop = 0
 
     companion object {
+        const val EXTRA_SHOW_NOTIFICATION = "show_notification"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "translation_bubble_channel"
         private const val TRASH_SIZE_DP = 140
@@ -93,12 +97,19 @@ class FloatingBubbleService : Service() {
         overlayManager = TranslationOverlayManager(this, windowManager, settingsRepository)
         touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         Log.d(TAG, "touchSlop=$touchSlop (System)")
+        pngAlphaBounds = analyzePngAlphaBounds(R.drawable.overlay_button_sw)
         createNotificationChannel()
         startBubbleSizeObserver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification())
+        val showNotification = intent?.getBooleanExtra(EXTRA_SHOW_NOTIFICATION, false) ?: false
+        if (showNotification) {
+            Log.d(TAG, "startForeground: notificationId=$NOTIFICATION_ID")
+            startForeground(NOTIFICATION_ID, buildNotification())
+        } else {
+            Log.d(TAG, "startService: keine Foreground-Notification (Standard)")
+        }
         showBubble()
         return START_STICKY
     }
@@ -196,14 +207,15 @@ class FloatingBubbleService : Service() {
         val visualPx = dpToPx(size.visualDp)
         val iconPx = dpToPx(size.iconDp)
 
-        // Root-Layout = Touchfläche (vollständig unsichtbar)
+        // Root-Layout = Touchfläche (vollständig unsichtbar, erlaubt Icon-Überlappung)
         val root = FrameLayout(this).apply {
             id = View.generateViewId()
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            clipChildren = false
+            clipToPadding = false
         }
-        bubbleContainer = root
 
-        // Overlay_Button_SW.png – weiße Pixel zur Laufzeit transparent machen
+        // Overlay_Button_SW.png als Bubble-Symbol
         val icon = ImageView(this).apply {
             setImageResource(R.drawable.overlay_button_sw)
             scaleType = ImageView.ScaleType.FIT_CENTER
@@ -245,9 +257,7 @@ class FloatingBubbleService : Service() {
         if (isBubbleAttached && bubbleView != null) {
             try { windowManager.removeView(bubbleView) } catch (_: Exception) {}
             bubbleView = null
-            bubbleContainer = null
             bubbleParams = null
-            bubbleCircle = null
             bubbleIcon = null
             isBubbleAttached = false
         }
@@ -334,6 +344,18 @@ class FloatingBubbleService : Service() {
 
                     Log.d(TAG, "Drop außerhalb Trash → Bubble bleibt sichtbar")
                     hideTrashOverlay()
+
+                    // Edge-Snap links: params.x → 0, Icon per translationX an den Rand
+                    if (bubbleParams != null) {
+                        val snapThreshold = dpToPx(24)
+                        if (bubbleParams!!.x < snapThreshold) {
+                            bubbleParams!!.x = 0
+                            bubbleView?.let { windowManager.updateViewLayout(it, bubbleParams) }
+                            applyLeftEdgeOffsetIfDocked()
+                            Log.d(TAG, "EdgeSnap: paramsX snapped to 0, translationX set")
+                        }
+                    }
+
                     serviceScope.launch {
                         settingsRepository.saveBubblePosition(
                             bubbleParams?.x ?: initialX,
@@ -514,48 +536,102 @@ class FloatingBubbleService : Service() {
         }
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
-        .setContentTitle(getString(R.string.notification_title))
-        .setContentText(getString(R.string.notification_text))
-        .setSmallIcon(android.R.drawable.ic_menu_sort_alphabetically)
-        .setPriority(NotificationCompat.PRIORITY_LOW)
-        .setContentIntent(
-            PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        )
-        .build()
+    private fun buildNotification(): android.app.Notification {
+        val largeIcon = BitmapFactory.decodeResource(resources, R.drawable.overlay_button_sw)
+        Log.d(TAG, "buildNotification: smallIcon=R.drawable.ic_notification_lolotrans channel=$CHANNEL_ID notificationId=$NOTIFICATION_ID largeIcon=${largeIcon.width}x${largeIcon.height}")
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification_lolotrans)
+            .setLargeIcon(largeIcon)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.bubble_active))
+            .setOngoing(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setContentIntent(
+                PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            )
+            .build()
+    }
+
+    // ── PNG-Analyse (nur lesen, nie verändern) ──
+
+    private data class PngAlphaBounds(
+        val imgW: Int, val imgH: Int,
+        val visLeft: Int, val visTop: Int, val visRight: Int, val visBottom: Int
+    )
+
+    private fun analyzePngAlphaBounds(resId: Int): PngAlphaBounds {
+        val bmp = BitmapFactory.decodeResource(resources, resId)
+        val w = bmp.width; val h = bmp.height
+        var l = w; var t = h; var r = 0; var b = 0
+        val pixels = IntArray(w * h)
+        bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val alpha = (pixels[y * w + x] shr 24) and 0xFF
+                if (alpha > 10) {
+                    if (x < l) l = x
+                    if (y < t) t = y
+                    if (x > r) r = x
+                    if (y > b) b = y
+                }
+            }
+        }
+        bmp.recycle()
+        val result = PngAlphaBounds(w, h, l, t, r, b)
+        Log.d(TAG, "PNG bounds: ${w}x${h} visible=($l,$t)-($r,$b) paddingLeft=$l paddingRight=${w-1-r}")
+        return result
+    }
 
     /**
-     * Begrenzt bubbleParams.x/y so, dass das sichtbare Symbol bis an den Bildschirmrand
-     * geschoben werden kann. Die unsichtbare Touchfläche darf dabei teilweise
-     * außerhalb des Bildschirms liegen (negative X-Werte erlaubt).
+     * Berechnet, wie viele Pixel das sichtbare Symbol vom ImageView-Rand entfernt ist.
+     */
+    private fun visibleInsetPx(iconPx: Int, side: Int, imgDimension: Int): Int =
+        if (imgDimension > 0) (side * iconPx / imgDimension) else 0
+
+    /**
+     * Standard-Clamp: Fenster darf nicht negativ, aber bis zum rechten Rand.
      */
     private fun clampBubblePosition() {
         val params = bubbleParams ?: return
         val touchPx = params.width
         if (touchPx <= 0) return
-
-        val visualPx = dpToPx(currentBubbleSize.visualDp)
-        val sideInset = ((touchPx - visualPx) / 2).coerceAtLeast(0)
-
         val metrics = resources.displayMetrics
         val screenW = metrics.widthPixels
         val screenH = metrics.heightPixels
 
-        val minX = -sideInset
-        val maxX = screenW - touchPx + sideInset
-        val minY = -sideInset
-        val maxY = screenH - touchPx + sideInset
+        params.x = params.x.coerceIn(0, (screenW - touchPx).coerceAtLeast(0))
+        params.y = params.y.coerceIn(0, (screenH - touchPx).coerceAtLeast(0))
 
-        val oldX = params.x
-        val oldY = params.y
-        params.x = params.x.coerceIn(minX, maxX)
-        params.y = params.y.coerceIn(minY, maxY)
+        // Linker Rand erreicht → Icon nach links versetzen (translationX)
+        applyLeftEdgeOffsetIfDocked()
+    }
 
-        if (oldX != params.x || oldY != params.y) {
-            Log.d(TAG, "Bubble clamp: touchPx=$touchPx visualPx=$visualPx " +
-                "sideInset=$sideInset minX=$minX maxX=$maxX " +
-                "old=($oldX,$oldY) clamped=(${params.x},${params.y})")
+    /**
+     * Wenn Bubble am linken Rand steht, verschiebt das sichtbare Icon per translationX
+     * weiter nach links, damit der sichtbare Button (nicht nur die ImageView) am Rand steht.
+     * translationX wird NUR gesetzt, wenn params.x ≈ 0, sonst auf 0 zurückgesetzt.
+     */
+    private fun applyLeftEdgeOffsetIfDocked() {
+        val icon = bubbleIcon ?: return
+        val params = bubbleParams ?: return
+        val alpha = pngAlphaBounds ?: return
+        val iconPx = (icon.layoutParams as? FrameLayout.LayoutParams)?.width ?: return
+        if (iconPx <= 0) return
+
+        val pngPadLeft = visibleInsetPx(iconPx, alpha.visLeft, alpha.imgW)
+        val isAtLeftEdge = params.x <= dpToPx(4)  // nahe am linken Rand
+
+        val targetTx = if (isAtLeftEdge) -pngPadLeft.toFloat() else 0f
+        if (icon.translationX != targetTx) {
+            icon.translationX = targetTx
+            val iconLoc = IntArray(2)
+            icon.getLocationOnScreen(iconLoc)
+            Log.d(TAG, "LeftDock: paramsX=${params.x} isDocked=$isAtLeftEdge " +
+                "translationX=$targetTx pngPadLeft=$pngPadLeft " +
+                "iconLeft=${iconLoc[0]} visibleContentLeft=${iconLoc[0] + pngPadLeft}")
         }
     }
 

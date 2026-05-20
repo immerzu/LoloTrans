@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         settingsRepository = SettingsRepository(this)
         hasOverlayPermission = Settings.canDrawOverlays(this)
-        Log.d(TAG, "onCreate: Overlay permission = $hasOverlayPermission")
+        Log.d(TAG, "onCreate: Overlay=$hasOverlayPermission")
         enableEdgeToEdge()
 
         setContent {
@@ -105,14 +105,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        val newState = Settings.canDrawOverlays(this)
-        Log.d(TAG, "onResume: Overlay permission changed $hasOverlayPermission -> $newState")
-        hasOverlayPermission = newState
-    }
-
-    private fun openOverlaySettings() {
-        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")))
+        val newOverlay = Settings.canDrawOverlays(this)
+        Log.d(TAG, "onResume: Overlay=$hasOverlayPermission→$newOverlay")
+        hasOverlayPermission = newOverlay
     }
 
     private fun startBubbleService() {
@@ -120,7 +115,13 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, R.string.permission_required, Toast.LENGTH_LONG).show()
             return
         }
-        startForegroundService(Intent(this, FloatingBubbleService::class.java))
+        val intent = Intent(this, FloatingBubbleService::class.java)
+        startService(intent)
+    }
+
+    private fun openOverlaySettings() {
+        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName")))
     }
 
     private fun stopBubbleService() {

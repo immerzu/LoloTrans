@@ -59,6 +59,11 @@
     <string name="notification_channel_desc">Zeigt an, dass die Übersetzungs-Bubble aktiv ist</string>
     <string name="notification_title">LoloTrans</string>
     <string name="notification_text">Übersetzungs-Bubble ist aktiv. Tippe sie an, um Text zu übersetzen.</string>
+    <string name="notification_permission_label">Benachrichtigungen</string>
+    <string name="notification_permission_granted">Erlaubt</string>
+    <string name="notification_permission_missing">Nicht erlaubt</string>
+    <string name="notification_permission_denied">Benachrichtigungen wurden nicht erlaubt. Die LoloTrans-Benachrichtigung kann fehlen.</string>
+    <string name="grant_notification_permission">Benachrichtigungen erlauben</string>
 
     <!-- Sprachliste -->
     <string name="lang_auto">Automatisch</string>
