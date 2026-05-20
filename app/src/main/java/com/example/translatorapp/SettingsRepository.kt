@@ -27,6 +27,7 @@ class SettingsRepository(private val context: Context) {
         private val KEY_AUTO_CLOSE_SECONDS = intPreferencesKey("auto_close_seconds")
         private val KEY_AUTO_CLOSE_ENABLED = booleanPreferencesKey("auto_close_enabled")
         private val KEY_BUBBLE_ENABLED = booleanPreferencesKey("bubble_enabled")
+        private val KEY_SHOW_SERVICE_NOTIFICATION = booleanPreferencesKey("show_service_notification")
     }
 
     // --- Zielsprache ---
@@ -100,5 +101,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setBubbleEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_BUBBLE_ENABLED] = enabled }
+    }
+
+    // --- Service-Benachrichtigung anzeigen (Standard: AUS) ---
+    val showServiceNotification: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_SHOW_SERVICE_NOTIFICATION] ?: false
+    }
+
+    suspend fun setShowServiceNotification(show: Boolean) {
+        context.dataStore.edit { it[KEY_SHOW_SERVICE_NOTIFICATION] = show }
     }
 }
