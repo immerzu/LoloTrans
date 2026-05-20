@@ -1,4 +1,4 @@
-package com.example.translatorapp
+package de.lolo.lolotrans
 
 import android.content.ClipboardManager
 import android.content.Context
@@ -62,7 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.translatorapp.ui.theme.TranslatorAppTheme
+import de.lolo.lolotrans.ui.theme.TranslatorAppTheme
 import kotlinx.coroutines.launch
 
 private const val TAG = "TranslatorApp"

@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.translatorapp"
+    namespace = "de.lolo.lolotrans"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.translatorapp"
+        applicationId = "de.lolo.lolotrans"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
     }
 
     buildTypes {

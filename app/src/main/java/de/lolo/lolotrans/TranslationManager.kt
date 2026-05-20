@@ -1,4 +1,4 @@
-package com.example.translatorapp
+package de.lolo.lolotrans
 
 import android.util.Log
 import com.google.mlkit.common.model.DownloadConditions

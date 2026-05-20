@@ -1,4 +1,4 @@
-package com.example.translatorapp.ui.theme
+package de.lolo.lolotrans.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme

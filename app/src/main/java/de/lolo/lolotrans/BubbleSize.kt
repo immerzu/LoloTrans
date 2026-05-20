@@ -1,4 +1,4 @@
-package com.example.translatorapp
+package de.lolo.lolotrans
 
 /**
  * Fünf Bubble-Größen mit getrennten Maßen für Touchfläche, Sichtbarkeit und Icon.

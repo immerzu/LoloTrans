@@ -1,4 +1,4 @@
-package com.example.translatorapp
+package de.lolo.lolotrans
 
 import android.content.Context
 import androidx.datastore.core.DataStore

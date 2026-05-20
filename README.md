@@ -1,5 +1,7 @@
 # LoloTrans
 
+**App-ID:** de.lolo.lolotrans
+
 LoloTrans ist eine Android-Übersetzungs-App mit Floating-Bubble, automatischer Quellspracherkennung und On-Device-Übersetzung per ML Kit.
 
 ## Lizenz
@@ -9,6 +11,10 @@ Apache License 2.0
 ## Autor
 
 immerzu (immerzu46@gmail.com)
+
+## Releases
+
+- GitHub: https://github.com/immerzu/LoloTrans/releases
 
 ## Funktionen
 
@@ -36,7 +42,8 @@ immerzu (immerzu46@gmail.com)
 
 - Beim ersten Übersetzen eines Sprachpaares lädt ML Kit das benötigte Sprachmodell herunter. Danach laufen Übersetzungen schneller und vollständig lokal.
 - Die App benötigt die Overlay-Berechtigung (SYSTEM_ALERT_WINDOW), um die Bubble und das Übersetzungsfenster über anderen Apps anzuzeigen.
-- Die App verwendet **Google ML Kit** als Übersetzungs-Engine. ML Kit ist ein proprietäres Google-SDK. Dies kann die Aufnahme in F-Droid ausschließen.
+- Die App verwendet **Google ML Kit** als Übersetzungs-Engine. ML Kit ist ein proprietäres Google-SDK.
+- **Offizielles F-Droid** ist wegen Google ML Kit aktuell nicht geeignet. **IzzyOnDroid** ist die realistischere Alternative, da dort GitHub-Release-APKs genutzt werden.
 
 ## Build
 
