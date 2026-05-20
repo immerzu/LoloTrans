@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -59,11 +60,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.lolo.lolotrans.BuildConfig
 import de.lolo.lolotrans.ui.theme.TranslatorAppTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 private const val TAG = "TranslatorApp"
 
@@ -145,6 +153,9 @@ fun MainScreen(
     val sourceLanguage by settingsRepository.sourceLanguage.collectAsStateWithLifecycle(initialValue = "auto")
     val bubbleSize by settingsRepository.bubbleSize.collectAsStateWithLifecycle(initialValue = BubbleSize.M)
     val bubbleEnabled by settingsRepository.bubbleEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val translationProvider by settingsRepository.effectiveTranslationProvider.collectAsStateWithLifecycle(initialValue = TranslationProvider.ML_KIT)
+    val libreBaseUrl by settingsRepository.libreTranslateBaseUrl.collectAsStateWithLifecycle(initialValue = "")
+    val libreApiKey by settingsRepository.libreTranslateApiKey.collectAsStateWithLifecycle(initialValue = "")
 
     Scaffold(
         containerColor = BgColor,
@@ -302,6 +313,108 @@ fun MainScreen(
             HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
             Spacer(modifier = Modifier.height(1.dp))
 
+            // --- Übersetzungsdienst ---
+            DarkCard {
+                SectionTitle("Übersetzungsdienst")
+                if (BuildConfig.ML_KIT_AVAILABLE) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ProviderButton("ML Kit lokal", translationProvider == TranslationProvider.ML_KIT,
+                            modifier = Modifier.weight(1f),
+                            onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.ML_KIT) } })
+                        ProviderButton("LibreTranslate", translationProvider == TranslationProvider.LIBRE_TRANSLATE,
+                            modifier = Modifier.weight(1f),
+                            onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.LIBRE_TRANSLATE) } })
+                    }
+                } else {
+                    Text("F-Droid-Build – kein Google ML Kit enthalten.", color = TextDim, fontSize = 13.sp)
+                }
+            }
+
+            // --- LibreTranslate-Einstellungen ---
+            if (translationProvider == TranslationProvider.LIBRE_TRANSLATE) {
+                Spacer(modifier = Modifier.height(1.dp))
+                HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(1.dp))
+
+                DarkCard {
+                    SectionTitle("LibreTranslate-Server")
+                    var urlText by remember(libreBaseUrl) { mutableStateOf(libreBaseUrl) }
+                    var apiKeyText by remember(libreApiKey) { mutableStateOf(libreApiKey) }
+                    var testResult by remember { mutableStateOf("") }
+
+                    OutlinedTextField(
+                        value = urlText,
+                        onValueChange = { urlText = it },
+                        label = { Text("Server-URL", color = TextDim) },
+                        placeholder = { Text("https://translate.example.com", color = TextDim) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite,
+                            focusedBorderColor = CardBorder,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = BgColor,
+                            unfocusedContainerColor = BgColor,
+                            focusedLabelColor = TextGray,
+                            unfocusedLabelColor = TextDim,
+                            cursorColor = TextWhite
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DarkButton("URL speichern", onClick = {
+                        scope.launch { settingsRepository.setLibreTranslateBaseUrl(urlText.trim()) }
+                    }, modifier = Modifier.fillMaxWidth())
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = apiKeyText,
+                        onValueChange = { apiKeyText = it },
+                        label = { Text("API-Key (optional)", color = TextDim) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite,
+                            focusedBorderColor = CardBorder,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = BgColor,
+                            unfocusedContainerColor = BgColor,
+                            focusedLabelColor = TextGray,
+                            unfocusedLabelColor = TextDim,
+                            cursorColor = TextWhite
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DarkButton("API-Key speichern", onClick = {
+                        scope.launch { settingsRepository.setLibreTranslateApiKey(apiKeyText.trim()) }
+                    }, modifier = Modifier.fillMaxWidth())
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    DarkButton("Server testen", onClick = {
+                        scope.launch {
+                            testResult = "Prüfe Server…"
+                            testResult = withContext(Dispatchers.IO) { testLibreServer(urlText.trim(), apiKeyText.trim()) }
+                        }
+                    }, modifier = Modifier.fillMaxWidth())
+
+                    if (testResult.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(testResult, color = TextGray, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Bei LibreTranslate wird der Text an den eingestellten Server gesendet.",
+                        color = TextDim, fontSize = 12.sp
+                    )
+                }
+            }
+
             // --- Datenschutzhinweis ---
             DarkCard {
                 SectionTitle("Datenschutz")
@@ -419,5 +532,50 @@ fun BubbleSizeSelector(selectedSize: BubbleSize, onSizeSelected: (BubbleSize) ->
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ProviderButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(6.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) TextWhite else BtnBg,
+            contentColor = if (selected) BgColor else TextWhite
+        ),
+        border = if (!selected) androidx.compose.foundation.BorderStroke(1.dp, CardBorder) else null
+    ) {
+        Text(text, fontSize = 12.sp)
+    }
+}
+
+private fun testLibreServer(baseUrl: String, apiKey: String): String {
+    val url = baseUrl.trimEnd('/')
+    if (url.isBlank()) return "Bitte Server-URL eingeben."
+    return try {
+        val conn = URL("$url/languages").openConnection() as HttpURLConnection
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        conn.requestMethod = "GET"
+        conn.setRequestProperty("Accept", "application/json")
+        if (apiKey.isNotBlank()) {
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+        }
+        when (conn.responseCode) {
+            200 -> {
+                val body = conn.inputStream.bufferedReader().readText()
+                if (body.isNotBlank() && body.contains("[")) "Server erreichbar - Sprachenliste geladen."
+                else "Server erreichbar, aber unerwartete Antwort."
+            }
+            401, 403 -> "Server erreichbar, aber Zugriff verweigert. API-Key prufen."
+            404 -> "Server erreichbar, aber /languages-Endpunkt nicht verfugbar."
+            else -> "Server antwortet mit HTTP ${conn.responseCode}."
+        }
+    } catch (e: java.net.UnknownHostException) {
+        "Server nicht erreichbar. URL prufen."
+    } catch (e: Exception) {
+        "Fehler: ${e.message?.take(80) ?: "unbekannt"}"
     }
 }

@@ -45,13 +45,36 @@ immerzu (immerzu46@gmail.com)
 - Die App verwendet **Google ML Kit** als Übersetzungs-Engine. ML Kit ist ein proprietäres Google-SDK.
 - **Offizielles F-Droid** ist wegen Google ML Kit aktuell nicht geeignet. **IzzyOnDroid** ist die realistischere Alternative, da dort GitHub-Release-APKs genutzt werden.
 
+## Build-Varianten
+
+Das Projekt bietet zwei Build-Flavors:
+
+### full (Standard)
+- Enthält Google ML Kit für On-Device-Übersetzung
+- Übersetzung läuft komplett lokal nach Modell-Download
+- APK ca. 77 MB (ML Kit Native-Libraries)
+
+```bash
+./gradlew assembleFullDebug
+```
+
+### fdroid (F-Droid)
+- Enthält KEIN Google ML Kit und KEINE Google Play Services
+- Nutzt einen LibreTranslate-kompatiblen Server für Übersetzungen
+- Nutzer muss Server-URL in den Einstellungen konfigurieren
+- Text wird zur Übersetzung an den konfigurierten Server gesendet
+- APK ca. 11 MB
+
+```bash
+./gradlew assembleFdroidDebug
+```
+
 ## Build
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleFullDebug    # Full-Build mit ML Kit
+./gradlew assembleFdroidDebug  # F-Droid-Build ohne ML Kit
 ```
-
-Die APK liegt dann unter `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Quellcode
 

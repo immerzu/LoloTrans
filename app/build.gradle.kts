@@ -12,8 +12,23 @@ android {
         applicationId = "de.lolo.lolotrans"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 10
+        versionName = "1.9"
+    }
+
+    flavorDimensions += "distribution"
+
+    productFlavors {
+        create("full") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ML_KIT_AVAILABLE", "true")
+            buildConfigField("String", "DEFAULT_PROVIDER", "\"ML_KIT\"")
+        }
+        create("fdroid") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ML_KIT_AVAILABLE", "false")
+            buildConfigField("String", "DEFAULT_PROVIDER", "\"LIBRE_TRANSLATE\"")
+        }
     }
 
     buildTypes {
@@ -37,6 +52,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     dependenciesInfo {
@@ -55,19 +71,19 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 
-    // ML Kit Translation
-    implementation("com.google.mlkit:translate:17.0.3")
-    implementation("com.google.mlkit:language-id:17.0.6")
-
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     // Core
     implementation("androidx.core:core-ktx:1.15.0")
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // ML Kit Translation (only in full flavor)
+    "fullImplementation"("com.google.mlkit:translate:17.0.3")
+    "fullImplementation"("com.google.mlkit:language-id:17.0.6")
+    "fullImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

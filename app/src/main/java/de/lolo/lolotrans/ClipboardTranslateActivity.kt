@@ -13,7 +13,6 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import com.google.mlkit.nl.translate.TranslateLanguage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -153,7 +152,7 @@ class ClipboardTranslateActivity : Activity() {
                 return
             }
             val mapped = TranslationManager.toLanguageTag(detected)
-            if (mapped == TranslateLanguage.ENGLISH && detected != "en") {
+            if (!TranslationManager.isLanguageSupported(detected)) {
                 Log.w(TAG, "Erkannte Sprache '$detected' nicht für Übersetzung unterstützt")
                 showError(getString(R.string.language_not_supported, detected))
                 return
@@ -191,7 +190,8 @@ class ClipboardTranslateActivity : Activity() {
             return
         }
 
-        val translationResult = translationManager.translate(clipboardText)
+        val translationResult = translationManager.translate(
+            clipboardText, effectiveSource, targetLang)
         Log.d(PERF, "translate=${System.currentTimeMillis() - t}ms")
         t = System.currentTimeMillis()
         if (translationResult.isSuccess) {

@@ -1,8 +1,11 @@
 # F-Droid Metadata Proposal für LoloTrans
 #
-# Blocker: Google ML Kit ist ein proprietäres SDK (NonFreeDep).
-# Siehe README.md für Details.
-# Aktuell ist IzzyOnDroid die realistischere Option.
+# Der F-Droid-Build nutzt den Flavor "fdroid", der KEIN Google ML Kit
+# und KEINE Google Play Services enthält. Übersetzung erfolgt über
+# einen LibreTranslate-kompatiblen Server.
+#
+# Nutzer müssen eine Server-URL in den Einstellungen konfigurieren.
+# Es werden keine API-Keys hartcodiert.
 
 Categories:
   - Writing
@@ -23,33 +26,26 @@ Description: |-
   die Quellsprache und zeigt die Übersetzung in einem verschiebbaren
   Overlay an.
 
+  Diese F-Droid-Variante enthält kein Google ML Kit. Die Übersetzung
+  erfolgt über einen LibreTranslate-kompatiblen Server. Die Server-URL
+  kann in den Einstellungen frei konfiguriert werden. Es werden keine
+  API-Keys vorausgesetzt oder hartcodiert.
+
   Die App überwacht die Zwischenablage nicht dauerhaft. Der
   Clipboard-Zugriff erfolgt nur nach aktivem Nutzer-Tap auf die Bubble.
-  Die Übersetzung läuft komplett auf dem Gerät (kein externer Server).
-
-  Internet-Zugriff wird nur für den initialen Download der
-  ML-Kit-Sprachmodelle benötigt. Nach dem Download sind alle
-  Übersetzungen offline und lokal.
-
-  Achtung: Die App verwendet Google ML Kit (proprietäres SDK). Dies
-  kann die Aufnahme in das offizielle F-Droid-Repository ausschließen.
 
 RepoType: git
 Repo: https://github.com/immerzu/LoloTrans.git
 
 Builds:
-  - versionName: '1.8'
-    versionCode: 9
-    commit: v1.8
+  - versionName: '1.9'
+    versionCode: 10
+    commit: v1.9
     subdir: app
     gradle:
-      - yes
+      - fdroid
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '1.8'
-CurrentVersionCode: 9
-
-# Anti-Features (bei Einreichung für offizielles F-Droid:
-# NonFreeDep wegen Google ML Kit / Play Services)
-# Bei IzzyOnDroid entfällt dieser Punkt.
+CurrentVersion: '1.9'
+CurrentVersionCode: 10

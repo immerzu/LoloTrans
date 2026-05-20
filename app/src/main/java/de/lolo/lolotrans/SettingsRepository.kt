@@ -28,6 +28,9 @@ class SettingsRepository(private val context: Context) {
         private val KEY_AUTO_CLOSE_ENABLED = booleanPreferencesKey("auto_close_enabled")
         private val KEY_BUBBLE_ENABLED = booleanPreferencesKey("bubble_enabled")
         private val KEY_SHOW_SERVICE_NOTIFICATION = booleanPreferencesKey("show_service_notification")
+        private val KEY_TRANSLATION_PROVIDER = stringPreferencesKey("translation_provider")
+        private val KEY_LIBRE_TRANSLATE_URL = stringPreferencesKey("libre_translate_url")
+        private val KEY_LIBRE_TRANSLATE_API_KEY = stringPreferencesKey("libre_translate_api_key")
     }
 
     // --- Zielsprache ---
@@ -39,7 +42,7 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[KEY_TARGET_LANGUAGE] = lang }
     }
 
-    // --- Quellsprache (Default: Englisch, nicht "auto") ---
+    // --- Quellsprache ---
     val sourceLanguage: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[KEY_SOURCE_LANGUAGE] ?: "en"
     }
@@ -48,16 +51,52 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[KEY_SOURCE_LANGUAGE] = lang }
     }
 
-    // --- Bubble-Größe (String-Speicherung, rückwärtskompatibel) ---
+    // --- Übersetzungsdienst ---
+    val translationProvider: Flow<TranslationProvider> = context.dataStore.data.map { prefs ->
+        val name = prefs[KEY_TRANSLATION_PROVIDER]
+            ?: if (BuildConfig.ML_KIT_AVAILABLE) TranslationProvider.ML_KIT.name
+               else TranslationProvider.LIBRE_TRANSLATE.name
+        try { TranslationProvider.valueOf(name) } catch (_: Exception) {
+            if (BuildConfig.ML_KIT_AVAILABLE) TranslationProvider.ML_KIT
+            else TranslationProvider.LIBRE_TRANSLATE
+        }
+    }
+
+    suspend fun setTranslationProvider(provider: TranslationProvider) {
+        context.dataStore.edit { it[KEY_TRANSLATION_PROVIDER] = provider.name }
+    }
+
+    /** Liefert TranslationProvider als Fluss, für F-Droid immer LIBRE_TRANSLATE. */
+    val effectiveTranslationProvider: Flow<TranslationProvider> = translationProvider.map {
+        if (BuildConfig.ML_KIT_AVAILABLE) it else TranslationProvider.LIBRE_TRANSLATE
+    }
+
+    // --- LibreTranslate URL ---
+    val libreTranslateBaseUrl: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LIBRE_TRANSLATE_URL] ?: ""
+    }
+
+    suspend fun setLibreTranslateBaseUrl(url: String) {
+        context.dataStore.edit { it[KEY_LIBRE_TRANSLATE_URL] = url }
+    }
+
+    // --- LibreTranslate API-Key ---
+    val libreTranslateApiKey: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LIBRE_TRANSLATE_API_KEY] ?: ""
+    }
+
+    suspend fun setLibreTranslateApiKey(key: String) {
+        context.dataStore.edit { it[KEY_LIBRE_TRANSLATE_API_KEY] = key }
+    }
+
+    // --- Bubble-Größe ---
     private val KEY_BUBBLE_SIZE_NAME = stringPreferencesKey("bubble_size_name")
 
-    /** Liefert die BubbleSize als Flow. Liest neuen String-Key, fällt auf alten Int-Key zurück. */
     val bubbleSize: Flow<BubbleSize> = context.dataStore.data.map { prefs ->
         val name = prefs[KEY_BUBBLE_SIZE_NAME]
         if (name != null) {
             BubbleSize.fromName(name)
         } else {
-            // Rückwärtskompatibilität: alter dp-Wert migrieren
             val legacyDp = prefs[KEY_BUBBLE_SIZE_DP]
             if (legacyDp != null) BubbleSize.fromLegacyDp(legacyDp) else BubbleSize.M
         }
@@ -66,7 +105,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBubbleSize(size: BubbleSize) {
         context.dataStore.edit {
             it[KEY_BUBBLE_SIZE_NAME] = size.name
-            // Alten Key löschen, damit er nicht mehr als Fallback dient
             it.remove(KEY_BUBBLE_SIZE_DP)
         }
     }
@@ -103,7 +141,7 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[KEY_BUBBLE_ENABLED] = enabled }
     }
 
-    // --- Service-Benachrichtigung anzeigen (Standard: AUS) ---
+    // --- Service-Benachrichtigung ---
     val showServiceNotification: Flow<Boolean> = context.dataStore.data.map {
         it[KEY_SHOW_SERVICE_NOTIFICATION] ?: false
     }
