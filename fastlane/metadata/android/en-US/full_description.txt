@@ -1,0 +1,22 @@
+LoloTrans is an Android translator with a freely movable floating bubble. After actively tapping the bubble, the app reads copied text from the clipboard, optionally auto-detects the source language, and displays the translation in a movable overlay.
+
+<b>Features:</b>
+- Floating bubble for quick translation from clipboard
+- Automatic source language detection (ML Kit Language Identification)
+- On-device translation (ML Kit Translation) — no server requests, full privacy
+- Freely movable translation overlay with copy/retranslate/close
+- Bubble sizes: XS / S / M / L / XL
+- Drag to move, drag-to-trash to close
+- Over 17 languages supported
+- Optional notification, disabled by default
+- Black/white LOLO-SOFT design
+
+<b>Privacy:</b>
+- No background clipboard monitoring — clipboard is read only when you actively tap the bubble
+- No internet transmission — translation runs entirely on-device after model download
+- No trackers, analytics, or ads
+- No external servers
+- Internet access is only needed for the initial download of ML Kit language models
+
+<b>Note:</b>
+Uses Google ML Kit for translation and language identification. Translation models are downloaded on first use per language pair.
