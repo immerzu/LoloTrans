@@ -1,4 +1,4 @@
-image: eclipse-temurin:17-jdk
+image: ghcr.io/cirruslabs/android-sdk:35
 
 stages:
   - build
@@ -6,6 +6,7 @@ stages:
 
 variables:
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  DEBIAN_FRONTEND: "noninteractive"
 
 cache:
   key: "$CI_COMMIT_REF_SLUG"
@@ -15,17 +16,7 @@ cache:
 
 before_script:
   - chmod +x ./gradlew
-  - apt-get update -qq
-  - apt-get install -y -qq wget unzip
-  - mkdir -p /sdk/cmdline-tools
-  - wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
-  - unzip -q cmdline-tools.zip -d /sdk/cmdline-tools
-  - mv /sdk/cmdline-tools/cmdline-tools /sdk/cmdline-tools/latest
-  - export ANDROID_HOME=/sdk
-  - export ANDROID_SDK_ROOT=/sdk
-  - yes | /sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-  - /sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-  - echo "sdk.dir=/sdk" > local.properties
+  - ./gradlew --version
 
 build_debug:
   stage: build
@@ -40,9 +31,9 @@ build_debug:
 lint_debug:
   stage: lint
   script:
-    - ./gradlew lintDebug
+    - ./gradlew lintDebug --stacktrace
   artifacts:
     when: on_success
     expire_in: 7 days
     paths:
-      - app/build/reports/lint-results-debug.html
+      - app/build/reports/
