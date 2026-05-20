@@ -6,7 +6,7 @@
 |---|---|
 | App name | LoloTrans |
 | Package ID | de.lolo.lolotrans |
-| Author | immerzu (immerzu46@gmail.com) |
+| Author | immerzu (kesselflickerei@gmx.de) |
 | License | Apache-2.0 |
 | Source code | https://github.com/immerzu/LoloTrans |
 | Releases | https://github.com/immerzu/LoloTrans/releases |

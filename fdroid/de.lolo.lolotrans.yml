@@ -1,38 +1,27 @@
-# F-Droid Metadata Proposal für LoloTrans
-#
-# Der F-Droid-Build nutzt den Flavor "fdroid", der KEIN Google ML Kit
-# und KEINE Google Play Services enthält. Übersetzung erfolgt über
-# einen LibreTranslate-kompatiblen Server.
-#
-# Nutzer müssen eine Server-URL in den Einstellungen konfigurieren.
-# Es werden keine API-Keys hartcodiert.
-
 Categories:
-  - Writing
-  - Utilities
+  - Translation & Dictionary
 License: Apache-2.0
 AuthorName: immerzu
-AuthorEmail: immerzu46@gmail.com
+AuthorEmail: kesselflickerei@gmx.de
 SourceCode: https://github.com/immerzu/LoloTrans
 IssueTracker: https://github.com/immerzu/LoloTrans/issues
 Changelog: https://github.com/immerzu/LoloTrans/releases
 
 Name: LoloTrans
-Summary: Floating-Bubble-Übersetzer für Android
+Summary: Floating-bubble translator with user-configurable backend
 Description: |-
-  LoloTrans ist ein Android-Übersetzer mit einer frei verschiebbaren
-  Floating-Bubble. Nach aktivem Antippen der Bubble liest die App den
-  kopierten Text aus der Zwischenablage, erkennt optional automatisch
-  die Quellsprache und zeigt die Übersetzung in einem verschiebbaren
-  Overlay an.
+  LoloTrans is an Android translator with a freely movable
+  floating bubble. After actively tapping the bubble, the app reads
+  copied text from the clipboard, auto-detects the source language
+  and shows the translation in a movable overlay.
 
-  Diese F-Droid-Variante enthält kein Google ML Kit. Die Übersetzung
-  erfolgt über einen LibreTranslate-kompatiblen Server. Die Server-URL
-  kann in den Einstellungen frei konfiguriert werden. Es werden keine
-  API-Keys vorausgesetzt oder hartcodiert.
+  This F-Droid variant uses a LibreTranslate-compatible provider.
+  No Google ML Kit, no Google Play Services, no Firebase. The
+  LibreTranslate server URL is user-configurable. No API keys are
+  hardcoded or required.
 
-  Die App überwacht die Zwischenablage nicht dauerhaft. Der
-  Clipboard-Zugriff erfolgt nur nach aktivem Nutzer-Tap auf die Bubble.
+  The app does not monitor the clipboard continuously. Clipboard
+  text is read only after an explicit user tap on the bubble.
 
 RepoType: git
 Repo: https://github.com/immerzu/LoloTrans.git
