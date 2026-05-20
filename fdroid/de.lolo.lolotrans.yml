@@ -8,6 +8,7 @@ IssueTracker: https://github.com/immerzu/LoloTrans/issues
 Changelog: https://github.com/immerzu/LoloTrans/releases
 
 Name: LoloTrans
+AutoName: LoloTrans
 Summary: Floating-bubble translator with user-configurable backend
 Description: |-
   LoloTrans is an Android translator with a freely movable
