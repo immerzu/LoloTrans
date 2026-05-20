@@ -1,0 +1,58 @@
+# F-Droid Metadata Proposal für LoloTrans
+#
+# WICHTIG: Die applicationId "com.example.translatorapp" ist ein Platzhalter.
+# Vor Einreichung muss eine dauerhafte ID festgelegt werden (z. B. "de.lolo.lolotrans").
+# Bis dahin ist dieser Metadaten-Entwurf ein lokaler Vorschlag.
+#
+# Blocker: Google ML Kit ist ein proprietäres SDK (NonFreeDep).
+# Siehe Bewertung in F-DROID_CHECKLIST.md oder README.md.
+
+Categories:
+  - Writing
+  - Utilities
+License: Apache-2.0
+AuthorName: immerzu
+AuthorEmail: immerzu46@gmail.com
+SourceCode: https://github.com/immerzu/LoloTrans
+IssueTracker: https://github.com/immerzu/LoloTrans/issues
+Changelog: https://github.com/immerzu/LoloTrans/releases
+
+Name: LoloTrans
+Summary: Floating-Bubble-Übersetzer für Android
+Description: |-
+  LoloTrans ist ein Android-Übersetzer mit einer frei verschiebbaren
+  Floating-Bubble. Nach aktivem Antippen der Bubble liest die App den
+  kopierten Text aus der Zwischenablage, erkennt optional automatisch
+  die Quellsprache und zeigt die Übersetzung in einem verschiebbaren
+  Overlay an.
+
+  Die App überwacht die Zwischenablage nicht dauerhaft. Der
+  Clipboard-Zugriff erfolgt nur nach aktivem Nutzer-Tap auf die Bubble.
+  Die Übersetzung läuft komplett auf dem Gerät (kein externer Server).
+
+  Internet-Zugriff wird nur für den initialen Download der
+  ML-Kit-Sprachmodelle benötigt. Nach dem Download sind alle
+  Übersetzungen offline und lokal.
+
+  Achtung: Die App verwendet Google ML Kit (proprietäres SDK). Dies
+  kann die Aufnahme in das offizielle F-Droid-Repository ausschließen.
+
+RepoType: git
+Repo: https://github.com/immerzu/LoloTrans.git
+
+Builds:
+  - versionName: '1.7'
+    versionCode: 8
+    commit: v1.7
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: '1.7'
+CurrentVersionCode: 8
+
+# Anti-Features (bei Einreichung für offizielles F-Droid:
+# NonFreeDep wegen Google ML Kit / Play Services)
+# Bei IzzyOnDroid entfällt dieser Punkt.
