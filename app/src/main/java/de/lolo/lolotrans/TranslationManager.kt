@@ -60,10 +60,7 @@ class TranslationManager(
             close()
             currentProviderType = effective
             currentProvider = when (effective) {
-                TranslationProvider.ML_KIT -> {
-                    val cls = Class.forName("de.lolo.lolotrans.MlKitTranslatorProvider")
-                    cls.getDeclaredConstructor().newInstance() as TranslatorProvider
-                }
+                TranslationProvider.ML_KIT -> MlKitTranslatorProvider()
                 TranslationProvider.LIBRE_TRANSLATE -> {
                     LibreTranslateProvider(
                         getBaseUrl = getLibreBaseUrl,
