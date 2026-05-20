@@ -32,17 +32,17 @@ build_debug:
   script:
     - ./gradlew assembleDebug --stacktrace
   artifacts:
-    when: always
+    when: on_success
     expire_in: 7 days
     paths:
-      - app/build/outputs/apk/debug/*.apk
+      - app/build/outputs/apk/debug/
 
 lint_debug:
   stage: lint
   script:
     - ./gradlew lintDebug
   artifacts:
-    when: always
+    when: on_success
     expire_in: 7 days
     paths:
       - app/build/reports/lint-results-debug.html
