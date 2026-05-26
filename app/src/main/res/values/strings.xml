@@ -90,22 +90,18 @@
     <!-- Settings – Sections -->
     <string name="section_translation_service">Translation service</string>
     <string name="section_libre_server">LibreTranslate server</string>
-    <string name="section_free_translations">FreeTranslations API key</string>
     <string name="section_diagnostics">Diagnostics</string>
     <string name="section_privacy">Privacy</string>
 
     <!-- Settings – Buttons & Labels -->
     <string name="provider_ml_kit">ML Kit (on-device)</string>
     <string name="provider_libre_translate">LibreTranslate</string>
-    <string name="provider_free_translations">FreeTranslations</string>
     <string name="label_server_url">Server URL</string>
     <string name="label_api_key_optional">API key (optional)</string>
-    <string name="label_api_key">API key</string>
     <string name="btn_save_url">Save URL</string>
     <string name="btn_save_api_key">Save API key</string>
     <string name="btn_test_server">Test server</string>
     <string name="status_checking_server">Checking server…</string>
-    <string name="status_checking_free_translations">Checking FreeTranslations…</string>
 
     <!-- Server test results -->
     <string name="server_test_languages_ok">Server reachable - language list loaded.</string>
@@ -117,11 +113,6 @@
     <string name="server_test_unreachable_internet">Server not reachable. Check internet connection.</string>
     <string name="server_test_error">Error: %1$s</string>
     <string name="server_test_enter_url">Please enter server URL.</string>
-    <string name="server_test_enter_api_key">Please enter API key.</string>
-
-    <!-- FreeTranslations server test -->
-    <string name="freetranslations_test_ok">FreeTranslations server reachable.</string>
-    <string name="freetranslations_test_http_code">Server responded with HTTP %1$d.</string>
 
     <!-- Clipboard diagnostics -->
     <string name="clipboard_empty">No text in clipboard</string>
@@ -131,5 +122,4 @@
     <!-- Info texts -->
     <string name="fdroid_no_mlkit">F-Droid build – no Google ML Kit included.</string>
     <string name="libre_data_notice">With LibreTranslate, text is sent to the configured server.</string>
-    <string name="freetranslations_data_notice">FreeTranslations sends text to translate-pa.googleapis.com.</string>
 </resources>

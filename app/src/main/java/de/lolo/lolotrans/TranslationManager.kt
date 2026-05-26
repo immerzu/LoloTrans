@@ -13,8 +13,7 @@ class TranslationManager(
         }
     },
     private val getLibreBaseUrl: () -> String = { "" },
-    private val getLibreApiKey: () -> String = { "" },
-    private val getFreeTranslationsApiKey: () -> String = { "" }
+    private val getLibreApiKey: () -> String = { "" }
 ) {
     data class LanguageOption(val code: String, val labelResId: Int)
 
@@ -66,11 +65,6 @@ class TranslationManager(
                     LibreTranslateProvider(
                         getBaseUrl = getLibreBaseUrl,
                         getApiKey = getLibreApiKey
-                    )
-                }
-                TranslationProvider.FREETRANSLATIONS -> {
-                    FreeTranslationsProvider(
-                        getApiKey = getFreeTranslationsApiKey
                     )
                 }
             }

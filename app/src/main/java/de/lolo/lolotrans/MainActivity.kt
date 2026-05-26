@@ -156,7 +156,6 @@ fun MainScreen(
     val translationProvider by settingsRepository.effectiveTranslationProvider.collectAsStateWithLifecycle(initialValue = TranslationProvider.ML_KIT)
     val libreBaseUrl by settingsRepository.libreTranslateBaseUrl.collectAsStateWithLifecycle(initialValue = "")
     val libreApiKey by settingsRepository.libreTranslateApiKey.collectAsStateWithLifecycle(initialValue = "")
-    val freeTranslationsApiKey by settingsRepository.freeTranslationsApiKey.collectAsStateWithLifecycle(initialValue = "")
 
     Scaffold(
         containerColor = BgColor,
@@ -327,9 +326,6 @@ fun MainScreen(
                     ProviderButton(stringResource(R.string.provider_libre_translate), translationProvider == TranslationProvider.LIBRE_TRANSLATE,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.LIBRE_TRANSLATE) } })
-                    ProviderButton(stringResource(R.string.provider_free_translations), translationProvider == TranslationProvider.FREETRANSLATIONS,
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.FREETRANSLATIONS) } })
                 }
             }
 
@@ -417,62 +413,6 @@ fun MainScreen(
                 }
             }
 
-            // --- FreeTranslations-Einstellungen ---
-            if (translationProvider == TranslationProvider.FREETRANSLATIONS) {
-                Spacer(modifier = Modifier.height(1.dp))
-                HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
-                Spacer(modifier = Modifier.height(1.dp))
-
-                DarkCard {
-                    SectionTitle(stringResource(R.string.section_free_translations))
-                    var apiKeyText by remember(freeTranslationsApiKey) { mutableStateOf(freeTranslationsApiKey) }
-                    var testResult by remember { mutableStateOf("") }
-
-                    OutlinedTextField(
-                        value = apiKeyText,
-                        onValueChange = { apiKeyText = it },
-                        label = { Text(stringResource(R.string.label_api_key), color = TextDim) },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite,
-                            focusedBorderColor = CardBorder,
-                            unfocusedBorderColor = CardBorder,
-                            focusedContainerColor = BgColor,
-                            unfocusedContainerColor = BgColor,
-                            focusedLabelColor = TextGray,
-                            unfocusedLabelColor = TextDim,
-                            cursorColor = TextWhite
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    DarkButton(stringResource(R.string.btn_save_api_key), onClick = {
-                        scope.launch { settingsRepository.setFreeTranslationsApiKey(apiKeyText.trim()) }
-                    }, modifier = Modifier.fillMaxWidth())
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    DarkButton(stringResource(R.string.btn_test_server), onClick = {
-                        scope.launch {
-                            testResult = context.getString(R.string.status_checking_free_translations)
-                            testResult = withContext(Dispatchers.IO) { testFreeTranslations(apiKeyText.trim()) }
-                        }
-                    }, modifier = Modifier.fillMaxWidth())
-
-                    if (testResult.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(testResult, color = TextGray, fontSize = 13.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.freetranslations_data_notice),
-                        color = TextDim, fontSize = 12.sp
-                    )
-                }
-            }
 
             // --- Datenschutzhinweis ---
             DarkCard {
@@ -639,37 +579,3 @@ private fun testLibreServer(baseUrl: String, apiKey: String): String {
     }
 }
 
-private fun testFreeTranslations(apiKey: String): String {
-    if (apiKey.isBlank()) return "Bitte API-Key eingeben."
-    return try {
-        val body = org.json.JSONArray().apply {
-            put(org.json.JSONArray().apply {
-                put(org.json.JSONArray().apply { put("test") })
-                put("en")
-                put("de")
-            })
-            put("te")
-        }
-        val conn = URL("https://translate-pa.googleapis.com/v1/translateHtml").openConnection() as HttpURLConnection
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("Content-Type", "application/json+protobuf")
-        conn.setRequestProperty("Accept", "application/json")
-        conn.setRequestProperty("X-goog-api-key", apiKey)
-        conn.setRequestProperty("Origin", "https://www.freetranslations.org")
-        conn.setRequestProperty("Referer", "https://www.freetranslations.org/")
-        conn.doOutput = true
-        java.io.OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
-        when (conn.responseCode) {
-            200 -> "FreeTranslations-Server erreichbar."
-            403 -> "Zugriff verweigert (HTTP 403). API-Key ungultig."
-            429 -> "Zu viele Anfragen (HTTP 429). Spater erneut versuchen."
-            else -> "Server antwortet mit HTTP ${conn.responseCode}."
-        }
-    } catch (e: java.net.UnknownHostException) {
-        "Server nicht erreichbar. Internetverbindung prufen."
-    } catch (e: Exception) {
-        "Fehler: ${e.message?.take(80) ?: "unbekannt"}"
-    }
-}
