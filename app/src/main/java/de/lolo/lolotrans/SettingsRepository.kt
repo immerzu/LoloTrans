@@ -31,6 +31,7 @@ class SettingsRepository(private val context: Context) {
         private val KEY_TRANSLATION_PROVIDER = stringPreferencesKey("translation_provider")
         private val KEY_LIBRE_TRANSLATE_URL = stringPreferencesKey("libre_translate_url")
         private val KEY_LIBRE_TRANSLATE_API_KEY = stringPreferencesKey("libre_translate_api_key")
+        private val KEY_FREE_TRANSLATIONS_API_KEY = stringPreferencesKey("free_translations_api_key")
     }
 
     // --- Zielsprache ---
@@ -66,9 +67,9 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[KEY_TRANSLATION_PROVIDER] = provider.name }
     }
 
-    /** Liefert TranslationProvider als Fluss, für F-Droid immer LIBRE_TRANSLATE. */
+    /** Liefert TranslationProvider als Fluss, für F-Droid kein ML_KIT. */
     val effectiveTranslationProvider: Flow<TranslationProvider> = translationProvider.map {
-        if (BuildConfig.ML_KIT_AVAILABLE) it else TranslationProvider.LIBRE_TRANSLATE
+        if (!BuildConfig.ML_KIT_AVAILABLE && it == TranslationProvider.ML_KIT) TranslationProvider.LIBRE_TRANSLATE else it
     }
 
     // --- LibreTranslate URL ---
@@ -87,6 +88,15 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLibreTranslateApiKey(key: String) {
         context.dataStore.edit { it[KEY_LIBRE_TRANSLATE_API_KEY] = key }
+    }
+
+    // --- FreeTranslations API-Key ---
+    val freeTranslationsApiKey: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FREE_TRANSLATIONS_API_KEY] ?: ""
+    }
+
+    suspend fun setFreeTranslationsApiKey(key: String) {
+        context.dataStore.edit { it[KEY_FREE_TRANSLATIONS_API_KEY] = key }
     }
 
     // --- Bubble-Größe ---

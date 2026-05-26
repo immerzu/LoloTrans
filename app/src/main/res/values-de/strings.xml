@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LoloTrans</string>
+
+    <!-- Hauptbildschirm -->
+    <string name="title">LoloTrans</string>
+    <string name="description">Tippe auf die sichtbare Bubble, um deinen kopierten Text übersetzen zu lassen.\n\nDiese App liest die Zwischenablage nicht heimlich im Hintergrund. Erst wenn du die Bubble antippst, wird der aktuelle Inhalt der Zwischenablage gelesen und übersetzt.</string>
+    <string name="privacy_notice">Die App übersetzt kopierten Text erst, wenn du aktiv auf die sichtbare Bubble tippst. Die Zwischenablage wird nicht dauerhaft im Hintergrund überwacht. Es werden keine Daten an externe Server gesendet – die Übersetzung erfolgt auf dem Gerät.</string>
+
+    <!-- Berechtigung -->
+    <string name="permission_status">Overlay-Berechtigung</string>
+    <string name="permission_granted">Berechtigung erteilt</string>
+    <string name="permission_denied">Berechtigung nicht erteilt</string>
+    <string name="grant_permission">Overlay-Berechtigung erteilen</string>
+    <string name="permission_required">Die Overlay-Berechtigung wird benötigt, um die Bubble über anderen Apps anzuzeigen.</string>
+
+    <!-- Sprache -->
+    <string name="target_language">Zielsprache</string>
+    <string name="source_language">Quellsprache</string>
+    <string name="auto_detect">Automatisch erkennen</string>
+
+    <!-- Bubble -->
+    <string name="bubble_section">Bubble</string>
+    <string name="bubble_size">Bubble-Größe</string>
+    <string name="bubble_size_xs">XS</string>
+    <string name="bubble_size_s">S</string>
+    <string name="bubble_size_m">M</string>
+    <string name="bubble_size_l">L</string>
+    <string name="bubble_size_xl">XL</string>
+    <string name="start_bubble">Bubble starten</string>
+    <string name="stop_bubble">Bubble stoppen</string>
+    <string name="bubble_active">Bubble ist aktiv</string>
+    <string name="bubble_inactive">Bubble ist inaktiv</string>
+
+    <!-- Overlay -->
+    <string name="copy_button">Kopieren</string>
+    <string name="close_button">Schließen</string>
+    <string name="retranslate_button">Neu übersetzen</string>
+    <string name="translation_copied">Übersetzung kopiert</string>
+    <string name="trash_hint">Loslassen zum Schließen</string>
+
+    <!-- Fehler -->
+    <string name="no_text_clipboard">Keine Text-Zwischenablage gefunden. Bitte Text kopieren und Bubble antippen.</string>
+    <string name="translating_clipboard">Übersetze Zwischenablage…</string>
+    <string name="translation_running">Übersetzung läuft…</string>
+    <string name="clipboard_test">Zwischenablage testen</string>
+    <string name="clipboard_test_result">Clipboard: %1$s</string>
+    <string name="translation_failed">Übersetzung fehlgeschlagen</string>
+    <string name="model_downloading">Sprachmodell wird heruntergeladen…</string>
+    <string name="model_download_failed">Sprachmodell konnte nicht geladen werden. Bitte Internetverbindung prüfen.</string>
+    <string name="translation_error">Fehler bei der Übersetzung</string>
+    <string name="same_language_warning">Quell- und Zielsprache sind identisch. Bitte andere Sprachkombination wählen.</string>
+    <string name="identifying_language">Sprache wird erkannt…</string>
+    <string name="identified_language">Erkannte Sprache: %1$s</string>
+    <string name="language_not_identified">Sprache konnte nicht erkannt werden. Bitte Quellsprache manuell wählen.</string>
+    <string name="language_not_supported">Erkannte Sprache (%1$s) wird nicht für Übersetzung unterstützt.</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">Translation Bubble</string>
+    <string name="notification_channel_desc">Zeigt an, dass die Übersetzungs-Bubble aktiv ist</string>
+    <string name="notification_title">LoloTrans</string>
+    <string name="notification_text">Übersetzungs-Bubble ist aktiv. Tippe sie an, um Text zu übersetzen.</string>
+    <string name="notification_permission_label">Benachrichtigungen</string>
+    <string name="notification_permission_granted">Erlaubt</string>
+    <string name="notification_permission_missing">Nicht erlaubt</string>
+    <string name="notification_permission_denied">Benachrichtigungen wurden nicht erlaubt. Die LoloTrans-Benachrichtigung kann fehlen.</string>
+    <string name="grant_notification_permission">Benachrichtigungen erlauben</string>
+
+    <!-- Sprachliste -->
+    <string name="lang_auto">Automatisch</string>
+    <string name="lang_en">Englisch</string>
+    <string name="lang_de">Deutsch</string>
+    <string name="lang_fr">Französisch</string>
+    <string name="lang_es">Spanisch</string>
+    <string name="lang_it">Italienisch</string>
+    <string name="lang_pt">Portugiesisch</string>
+    <string name="lang_nl">Niederländisch</string>
+    <string name="lang_pl">Polnisch</string>
+    <string name="lang_ru">Russisch</string>
+    <string name="lang_ja">Japanisch</string>
+    <string name="lang_ko">Koreanisch</string>
+    <string name="lang_zh">Chinesisch</string>
+    <string name="lang_ar">Arabisch</string>
+    <string name="lang_tr">Türkisch</string>
+    <string name="lang_hi">Hindi</string>
+    <string name="lang_th">Thailändisch</string>
+    <string name="lang_vi">Vietnamesisch</string>
+    <string name="lang_sv">Schwedisch</string>
+
+    <!-- Einstellungen – Abschnitte -->
+    <string name="section_translation_service">Übersetzungsdienst</string>
+    <string name="section_libre_server">LibreTranslate-Server</string>
+    <string name="section_free_translations">FreeTranslations API-Key</string>
+    <string name="section_diagnostics">Diagnose</string>
+    <string name="section_privacy">Datenschutz</string>
+
+    <!-- Einstellungen – Buttons & Labels -->
+    <string name="provider_ml_kit">ML Kit lokal</string>
+    <string name="provider_libre_translate">LibreTranslate</string>
+    <string name="provider_free_translations">FreeTranslations</string>
+    <string name="label_server_url">Server-URL</string>
+    <string name="label_api_key_optional">API-Key (optional)</string>
+    <string name="label_api_key">API-Key</string>
+    <string name="btn_save_url">URL speichern</string>
+    <string name="btn_save_api_key">API-Key speichern</string>
+    <string name="btn_test_server">Server testen</string>
+    <string name="status_checking_server">Prüfe Server…</string>
+    <string name="status_checking_free_translations">Prüfe FreeTranslations…</string>
+
+    <!-- Server-Test Ergebnisse -->
+    <string name="server_test_languages_ok">Server erreichbar - Sprachenliste geladen.</string>
+    <string name="server_test_unexpected">Server erreichbar, aber unerwartete Antwort.</string>
+    <string name="server_test_access_denied">Server erreichbar, aber Zugriff verweigert. API-Key prüfen.</string>
+    <string name="server_test_endpoint_missing">Server erreichbar, aber /languages-Endpunkt nicht verfügbar.</string>
+    <string name="server_test_http_code">Server antwortet mit HTTP %1$d.</string>
+    <string name="server_test_unreachable">Server nicht erreichbar. URL prüfen.</string>
+    <string name="server_test_unreachable_internet">Server nicht erreichbar. Internetverbindung prüfen.</string>
+    <string name="server_test_error">Fehler: %1$s</string>
+    <string name="server_test_enter_url">Bitte Server-URL eingeben.</string>
+    <string name="server_test_enter_api_key">Bitte API-Key eingeben.</string>
+
+    <!-- FreeTranslations Server-Test -->
+    <string name="freetranslations_test_ok">FreeTranslations-Server erreichbar.</string>
+    <string name="freetranslations_test_http_code">Server antwortet mit HTTP %1$d.</string>
+
+    <!-- Clipboard-Diagnose -->
+    <string name="clipboard_empty">Kein Text in der Zwischenablage</string>
+    <string name="clipboard_no_text">Clipboard enthält keinen Text</string>
+    <string name="clipboard_text_found">Text gefunden (%1$d Zeichen): \"%2$s…\"</string>
+
+    <!-- Info-Texte -->
+    <string name="fdroid_no_mlkit">F-Droid-Build – kein Google ML Kit enthalten.</string>
+    <string name="libre_data_notice">Bei LibreTranslate wird der Text an den eingestellten Server gesendet.</string>
+    <string name="freetranslations_data_notice">FreeTranslations sendet den Text an translate-pa.googleapis.com.</string>
+</resources>

@@ -156,6 +156,7 @@ fun MainScreen(
     val translationProvider by settingsRepository.effectiveTranslationProvider.collectAsStateWithLifecycle(initialValue = TranslationProvider.ML_KIT)
     val libreBaseUrl by settingsRepository.libreTranslateBaseUrl.collectAsStateWithLifecycle(initialValue = "")
     val libreApiKey by settingsRepository.libreTranslateApiKey.collectAsStateWithLifecycle(initialValue = "")
+    val freeTranslationsApiKey by settingsRepository.freeTranslationsApiKey.collectAsStateWithLifecycle(initialValue = "")
 
     Scaffold(
         containerColor = BgColor,
@@ -227,7 +228,7 @@ fun MainScreen(
 
             // --- Bubble-Steuerung ---
             DarkCard {
-                SectionTitle("Bubble")
+                SectionTitle(stringResource(R.string.bubble_section))
                 Text(
                     text = if (bubbleEnabled) "● ${stringResource(R.string.bubble_active)}"
                     else "○ ${stringResource(R.string.bubble_inactive)}",
@@ -292,15 +293,15 @@ fun MainScreen(
             // --- Diagnose ---
             var clipboardTestResult by remember { mutableStateOf("") }
             DarkCard {
-                SectionTitle("Diagnose")
+                SectionTitle(stringResource(R.string.section_diagnostics))
                 DarkButton(stringResource(R.string.clipboard_test), onClick = {
                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = cm.primaryClip
-                    clipboardTestResult = if (clip == null || clip.itemCount == 0) "Kein Text in der Zwischenablage"
+                    clipboardTestResult = if (clip == null || clip.itemCount == 0) context.getString(R.string.clipboard_empty)
                     else {
                         val txt = clip.getItemAt(0).coerceToText(context)?.toString()
-                        if (txt.isNullOrEmpty()) "Clipboard enthält keinen Text"
-                        else "Text gefunden (${txt.length} Zeichen): \"${txt.take(80)}…\""
+                        if (txt.isNullOrEmpty()) context.getString(R.string.clipboard_no_text)
+                        else context.getString(R.string.clipboard_text_found, txt.length, txt.take(80))
                     }
                 }, modifier = Modifier.fillMaxWidth())
                 if (clipboardTestResult.isNotEmpty()) {
@@ -315,19 +316,20 @@ fun MainScreen(
 
             // --- Übersetzungsdienst ---
             DarkCard {
-                SectionTitle("Übersetzungsdienst")
-                if (BuildConfig.ML_KIT_AVAILABLE) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ProviderButton("ML Kit lokal", translationProvider == TranslationProvider.ML_KIT,
-                            modifier = Modifier.weight(1f),
+                SectionTitle(stringResource(R.string.section_translation_service))
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (BuildConfig.ML_KIT_AVAILABLE) {
+                        ProviderButton(stringResource(R.string.provider_ml_kit), translationProvider == TranslationProvider.ML_KIT,
+                            modifier = Modifier.fillMaxWidth(),
                             onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.ML_KIT) } })
-                        ProviderButton("LibreTranslate", translationProvider == TranslationProvider.LIBRE_TRANSLATE,
-                            modifier = Modifier.weight(1f),
-                            onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.LIBRE_TRANSLATE) } })
                     }
-                } else {
-                    Text("F-Droid-Build – kein Google ML Kit enthalten.", color = TextDim, fontSize = 13.sp)
+                    ProviderButton(stringResource(R.string.provider_libre_translate), translationProvider == TranslationProvider.LIBRE_TRANSLATE,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.LIBRE_TRANSLATE) } })
+                    ProviderButton(stringResource(R.string.provider_free_translations), translationProvider == TranslationProvider.FREETRANSLATIONS,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.FREETRANSLATIONS) } })
                 }
             }
 
@@ -338,7 +340,7 @@ fun MainScreen(
                 Spacer(modifier = Modifier.height(1.dp))
 
                 DarkCard {
-                    SectionTitle("LibreTranslate-Server")
+                    SectionTitle(stringResource(R.string.section_libre_server))
                     var urlText by remember(libreBaseUrl) { mutableStateOf(libreBaseUrl) }
                     var apiKeyText by remember(libreApiKey) { mutableStateOf(libreApiKey) }
                     var testResult by remember { mutableStateOf("") }
@@ -346,7 +348,7 @@ fun MainScreen(
                     OutlinedTextField(
                         value = urlText,
                         onValueChange = { urlText = it },
-                        label = { Text("Server-URL", color = TextDim) },
+                        label = { Text(stringResource(R.string.label_server_url), color = TextDim) },
                         placeholder = { Text("https://translate.example.com", color = TextDim) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
@@ -363,7 +365,7 @@ fun MainScreen(
                         )
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    DarkButton("URL speichern", onClick = {
+                    DarkButton(stringResource(R.string.btn_save_url), onClick = {
                         scope.launch { settingsRepository.setLibreTranslateBaseUrl(urlText.trim()) }
                     }, modifier = Modifier.fillMaxWidth())
 
@@ -372,7 +374,7 @@ fun MainScreen(
                     OutlinedTextField(
                         value = apiKeyText,
                         onValueChange = { apiKeyText = it },
-                        label = { Text("API-Key (optional)", color = TextDim) },
+                        label = { Text(stringResource(R.string.label_api_key_optional), color = TextDim) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -390,14 +392,14 @@ fun MainScreen(
                         )
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    DarkButton("API-Key speichern", onClick = {
+                    DarkButton(stringResource(R.string.btn_save_api_key), onClick = {
                         scope.launch { settingsRepository.setLibreTranslateApiKey(apiKeyText.trim()) }
                     }, modifier = Modifier.fillMaxWidth())
 
                     Spacer(modifier = Modifier.height(10.dp))
-                    DarkButton("Server testen", onClick = {
+                    DarkButton(stringResource(R.string.btn_test_server), onClick = {
                         scope.launch {
-                            testResult = "Prüfe Server…"
+                            testResult = context.getString(R.string.status_checking_server)
                             testResult = withContext(Dispatchers.IO) { testLibreServer(urlText.trim(), apiKeyText.trim()) }
                         }
                     }, modifier = Modifier.fillMaxWidth())
@@ -409,7 +411,64 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Bei LibreTranslate wird der Text an den eingestellten Server gesendet.",
+                        stringResource(R.string.libre_data_notice),
+                        color = TextDim, fontSize = 12.sp
+                    )
+                }
+            }
+
+            // --- FreeTranslations-Einstellungen ---
+            if (translationProvider == TranslationProvider.FREETRANSLATIONS) {
+                Spacer(modifier = Modifier.height(1.dp))
+                HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(1.dp))
+
+                DarkCard {
+                    SectionTitle(stringResource(R.string.section_free_translations))
+                    var apiKeyText by remember(freeTranslationsApiKey) { mutableStateOf(freeTranslationsApiKey) }
+                    var testResult by remember { mutableStateOf("") }
+
+                    OutlinedTextField(
+                        value = apiKeyText,
+                        onValueChange = { apiKeyText = it },
+                        label = { Text(stringResource(R.string.label_api_key), color = TextDim) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite,
+                            focusedBorderColor = CardBorder,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = BgColor,
+                            unfocusedContainerColor = BgColor,
+                            focusedLabelColor = TextGray,
+                            unfocusedLabelColor = TextDim,
+                            cursorColor = TextWhite
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DarkButton(stringResource(R.string.btn_save_api_key), onClick = {
+                        scope.launch { settingsRepository.setFreeTranslationsApiKey(apiKeyText.trim()) }
+                    }, modifier = Modifier.fillMaxWidth())
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    DarkButton(stringResource(R.string.btn_test_server), onClick = {
+                        scope.launch {
+                            testResult = context.getString(R.string.status_checking_free_translations)
+                            testResult = withContext(Dispatchers.IO) { testFreeTranslations(apiKeyText.trim()) }
+                        }
+                    }, modifier = Modifier.fillMaxWidth())
+
+                    if (testResult.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(testResult, color = TextGray, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.freetranslations_data_notice),
                         color = TextDim, fontSize = 12.sp
                     )
                 }
@@ -417,7 +476,7 @@ fun MainScreen(
 
             // --- Datenschutzhinweis ---
             DarkCard {
-                SectionTitle("Datenschutz")
+                SectionTitle(stringResource(R.string.section_privacy))
                 Text(stringResource(R.string.privacy_notice), color = TextDim, fontSize = 13.sp)
             }
 
@@ -575,6 +634,41 @@ private fun testLibreServer(baseUrl: String, apiKey: String): String {
         }
     } catch (e: java.net.UnknownHostException) {
         "Server nicht erreichbar. URL prufen."
+    } catch (e: Exception) {
+        "Fehler: ${e.message?.take(80) ?: "unbekannt"}"
+    }
+}
+
+private fun testFreeTranslations(apiKey: String): String {
+    if (apiKey.isBlank()) return "Bitte API-Key eingeben."
+    return try {
+        val body = org.json.JSONArray().apply {
+            put(org.json.JSONArray().apply {
+                put(org.json.JSONArray().apply { put("test") })
+                put("en")
+                put("de")
+            })
+            put("te")
+        }
+        val conn = URL("https://translate-pa.googleapis.com/v1/translateHtml").openConnection() as HttpURLConnection
+        conn.connectTimeout = 5000
+        conn.readTimeout = 5000
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json+protobuf")
+        conn.setRequestProperty("Accept", "application/json")
+        conn.setRequestProperty("X-goog-api-key", apiKey)
+        conn.setRequestProperty("Origin", "https://www.freetranslations.org")
+        conn.setRequestProperty("Referer", "https://www.freetranslations.org/")
+        conn.doOutput = true
+        java.io.OutputStreamWriter(conn.outputStream).use { it.write(body.toString()) }
+        when (conn.responseCode) {
+            200 -> "FreeTranslations-Server erreichbar."
+            403 -> "Zugriff verweigert (HTTP 403). API-Key ungultig."
+            429 -> "Zu viele Anfragen (HTTP 429). Spater erneut versuchen."
+            else -> "Server antwortet mit HTTP ${conn.responseCode}."
+        }
+    } catch (e: java.net.UnknownHostException) {
+        "Server nicht erreichbar. Internetverbindung prufen."
     } catch (e: Exception) {
         "Fehler: ${e.message?.take(80) ?: "unbekannt"}"
     }

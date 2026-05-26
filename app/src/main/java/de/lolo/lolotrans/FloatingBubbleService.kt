@@ -93,7 +93,11 @@ class FloatingBubbleService : Service() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         settingsRepository = SettingsRepository(this)
-        translationManager = TranslationManager()
+        translationManager = TranslationManager(
+            getFreeTranslationsApiKey = {
+                kotlinx.coroutines.runBlocking { settingsRepository.freeTranslationsApiKey.first() }
+            }
+        )
         overlayManager = TranslationOverlayManager(this, windowManager, settingsRepository)
         touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         Log.d(TAG, "touchSlop=$touchSlop (System)")

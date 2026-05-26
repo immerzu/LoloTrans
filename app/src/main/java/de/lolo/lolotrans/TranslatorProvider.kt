@@ -1,6 +1,6 @@
 package de.lolo.lolotrans
 
-enum class TranslationProvider { ML_KIT, LIBRE_TRANSLATE }
+enum class TranslationProvider { ML_KIT, LIBRE_TRANSLATE, FREETRANSLATIONS }
 
 interface TranslatorProvider {
     suspend fun translate(

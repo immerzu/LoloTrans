@@ -13,7 +13,8 @@ class TranslationManager(
         }
     },
     private val getLibreBaseUrl: () -> String = { "" },
-    private val getLibreApiKey: () -> String = { "" }
+    private val getLibreApiKey: () -> String = { "" },
+    private val getFreeTranslationsApiKey: () -> String = { "" }
 ) {
     data class LanguageOption(val code: String, val labelResId: Int)
 
@@ -40,7 +41,7 @@ class TranslationManager(
         fun toLanguageTag(code: String): String = code.lowercase().trim()
 
         private val supportedLangSet = setOf(
-            "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru",
+            "auto", "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru",
             "uk", "tr", "ar", "zh", "ja", "ko", "hi", "th", "vi", "sv",
             "ro", "no", "da", "fi", "cs", "el", "hu", "id", "ms",
             "sk", "bg", "hr", "ca", "he"
@@ -53,7 +54,7 @@ class TranslationManager(
     private fun requireProvider(): TranslatorProvider {
         val desired = getTranslationProvider()
         val effective = when {
-            !BuildConfig.ML_KIT_AVAILABLE -> TranslationProvider.LIBRE_TRANSLATE
+            !BuildConfig.ML_KIT_AVAILABLE && desired == TranslationProvider.ML_KIT -> TranslationProvider.LIBRE_TRANSLATE
             else -> desired
         }
         if (currentProvider == null || currentProviderType != effective) {
@@ -65,6 +66,11 @@ class TranslationManager(
                     LibreTranslateProvider(
                         getBaseUrl = getLibreBaseUrl,
                         getApiKey = getLibreApiKey
+                    )
+                }
+                TranslationProvider.FREETRANSLATIONS -> {
+                    FreeTranslationsProvider(
+                        getApiKey = getFreeTranslationsApiKey
                     )
                 }
             }

@@ -2,87 +2,134 @@
 <resources>
     <string name="app_name">LoloTrans</string>
 
-    <!-- Hauptbildschirm -->
+    <!-- Main screen -->
     <string name="title">LoloTrans</string>
-    <string name="description">Tippe auf die sichtbare Bubble, um deinen kopierten Text übersetzen zu lassen.\n\nDiese App liest die Zwischenablage nicht heimlich im Hintergrund. Erst wenn du die Bubble antippst, wird der aktuelle Inhalt der Zwischenablage gelesen und übersetzt.</string>
-    <string name="privacy_notice">Die App übersetzt kopierten Text erst, wenn du aktiv auf die sichtbare Bubble tippst. Die Zwischenablage wird nicht dauerhaft im Hintergrund überwacht. Es werden keine Daten an externe Server gesendet – die Übersetzung erfolgt auf dem Gerät.</string>
+    <string name="description">Tap the visible bubble to translate your copied text.\n\nThis app does not secretly read your clipboard in the background. Only when you tap the bubble, the current clipboard content is read and translated.</string>
+    <string name="privacy_notice">The app only translates copied text when you actively tap the visible bubble. The clipboard is not continuously monitored in the background. No data is sent to external servers – translation runs on the device.</string>
 
-    <!-- Berechtigung -->
-    <string name="permission_status">Overlay-Berechtigung</string>
-    <string name="permission_granted">Berechtigung erteilt</string>
-    <string name="permission_denied">Berechtigung nicht erteilt</string>
-    <string name="grant_permission">Overlay-Berechtigung erteilen</string>
-    <string name="permission_required">Die Overlay-Berechtigung wird benötigt, um die Bubble über anderen Apps anzuzeigen.</string>
+    <!-- Permission -->
+    <string name="permission_status">Overlay permission</string>
+    <string name="permission_granted">Permission granted</string>
+    <string name="permission_denied">Permission denied</string>
+    <string name="grant_permission">Grant overlay permission</string>
+    <string name="permission_required">Overlay permission is required to show the bubble above other apps.</string>
 
-    <!-- Sprache -->
-    <string name="target_language">Zielsprache</string>
-    <string name="source_language">Quellsprache</string>
-    <string name="auto_detect">Automatisch erkennen</string>
+    <!-- Language -->
+    <string name="target_language">Target language</string>
+    <string name="source_language">Source language</string>
+    <string name="auto_detect">Auto-detect</string>
 
     <!-- Bubble -->
-    <string name="bubble_size">Bubble-Größe</string>
+    <string name="bubble_section">Bubble</string>
+    <string name="bubble_size">Bubble size</string>
     <string name="bubble_size_xs">XS</string>
     <string name="bubble_size_s">S</string>
     <string name="bubble_size_m">M</string>
     <string name="bubble_size_l">L</string>
     <string name="bubble_size_xl">XL</string>
-    <string name="start_bubble">Bubble starten</string>
-    <string name="stop_bubble">Bubble stoppen</string>
-    <string name="bubble_active">Bubble ist aktiv</string>
-    <string name="bubble_inactive">Bubble ist inaktiv</string>
+    <string name="start_bubble">Start bubble</string>
+    <string name="stop_bubble">Stop bubble</string>
+    <string name="bubble_active">Bubble is active</string>
+    <string name="bubble_inactive">Bubble is inactive</string>
 
     <!-- Overlay -->
-    <string name="copy_button">Kopieren</string>
-    <string name="close_button">Schließen</string>
-    <string name="retranslate_button">Neu übersetzen</string>
-    <string name="translation_copied">Übersetzung kopiert</string>
-    <string name="trash_hint">Loslassen zum Schließen</string>
+    <string name="copy_button">Copy</string>
+    <string name="close_button">Close</string>
+    <string name="retranslate_button">Retranslate</string>
+    <string name="translation_copied">Translation copied</string>
+    <string name="trash_hint">Release to close</string>
 
-    <!-- Fehler -->
-    <string name="no_text_clipboard">Keine Text-Zwischenablage gefunden. Bitte Text kopieren und Bubble antippen.</string>
-    <string name="translating_clipboard">Übersetze Zwischenablage…</string>
-    <string name="translation_running">Übersetzung läuft…</string>
-    <string name="clipboard_test">Zwischenablage testen</string>
+    <!-- Errors -->
+    <string name="no_text_clipboard">No text found in clipboard. Please copy text and tap the bubble.</string>
+    <string name="translating_clipboard">Translating clipboard…</string>
+    <string name="translation_running">Translation in progress…</string>
+    <string name="clipboard_test">Test clipboard</string>
     <string name="clipboard_test_result">Clipboard: %1$s</string>
-    <string name="translation_failed">Übersetzung fehlgeschlagen</string>
-    <string name="model_downloading">Sprachmodell wird heruntergeladen…</string>
-    <string name="model_download_failed">Sprachmodell konnte nicht geladen werden. Bitte Internetverbindung prüfen.</string>
-    <string name="translation_error">Fehler bei der Übersetzung</string>
-    <string name="same_language_warning">Quell- und Zielsprache sind identisch. Bitte andere Sprachkombination wählen.</string>
-    <string name="identifying_language">Sprache wird erkannt…</string>
-    <string name="identified_language">Erkannte Sprache: %1$s</string>
-    <string name="language_not_identified">Sprache konnte nicht erkannt werden. Bitte Quellsprache manuell wählen.</string>
-    <string name="language_not_supported">Erkannte Sprache (%1$s) wird nicht für Übersetzung unterstützt.</string>
+    <string name="translation_failed">Translation failed</string>
+    <string name="model_downloading">Downloading language model…</string>
+    <string name="model_download_failed">Language model could not be loaded. Please check internet connection.</string>
+    <string name="translation_error">Translation error</string>
+    <string name="same_language_warning">Source and target language are identical. Please choose a different language combination.</string>
+    <string name="identifying_language">Identifying language…</string>
+    <string name="identified_language">Identified language: %1$s</string>
+    <string name="language_not_identified">Language could not be identified. Please select source language manually.</string>
+    <string name="language_not_supported">Identified language (%1$s) is not supported for translation.</string>
 
     <!-- Notification -->
     <string name="notification_channel_name">Translation Bubble</string>
-    <string name="notification_channel_desc">Zeigt an, dass die Übersetzungs-Bubble aktiv ist</string>
+    <string name="notification_channel_desc">Shows that the translation bubble is active</string>
     <string name="notification_title">LoloTrans</string>
-    <string name="notification_text">Übersetzungs-Bubble ist aktiv. Tippe sie an, um Text zu übersetzen.</string>
-    <string name="notification_permission_label">Benachrichtigungen</string>
-    <string name="notification_permission_granted">Erlaubt</string>
-    <string name="notification_permission_missing">Nicht erlaubt</string>
-    <string name="notification_permission_denied">Benachrichtigungen wurden nicht erlaubt. Die LoloTrans-Benachrichtigung kann fehlen.</string>
-    <string name="grant_notification_permission">Benachrichtigungen erlauben</string>
+    <string name="notification_text">Translation bubble is active. Tap it to translate text.</string>
+    <string name="notification_permission_label">Notifications</string>
+    <string name="notification_permission_granted">Allowed</string>
+    <string name="notification_permission_missing">Not allowed</string>
+    <string name="notification_permission_denied">Notifications were not allowed. The LoloTrans notification may be missing.</string>
+    <string name="grant_notification_permission">Allow notifications</string>
 
-    <!-- Sprachliste -->
-    <string name="lang_auto">Automatisch</string>
-    <string name="lang_en">Englisch</string>
-    <string name="lang_de">Deutsch</string>
-    <string name="lang_fr">Französisch</string>
-    <string name="lang_es">Spanisch</string>
-    <string name="lang_it">Italienisch</string>
-    <string name="lang_pt">Portugiesisch</string>
-    <string name="lang_nl">Niederländisch</string>
-    <string name="lang_pl">Polnisch</string>
-    <string name="lang_ru">Russisch</string>
-    <string name="lang_ja">Japanisch</string>
-    <string name="lang_ko">Koreanisch</string>
-    <string name="lang_zh">Chinesisch</string>
-    <string name="lang_ar">Arabisch</string>
-    <string name="lang_tr">Türkisch</string>
+    <!-- Language list -->
+    <string name="lang_auto">Auto</string>
+    <string name="lang_en">English</string>
+    <string name="lang_de">German</string>
+    <string name="lang_fr">French</string>
+    <string name="lang_es">Spanish</string>
+    <string name="lang_it">Italian</string>
+    <string name="lang_pt">Portuguese</string>
+    <string name="lang_nl">Dutch</string>
+    <string name="lang_pl">Polish</string>
+    <string name="lang_ru">Russian</string>
+    <string name="lang_ja">Japanese</string>
+    <string name="lang_ko">Korean</string>
+    <string name="lang_zh">Chinese</string>
+    <string name="lang_ar">Arabic</string>
+    <string name="lang_tr">Turkish</string>
     <string name="lang_hi">Hindi</string>
-    <string name="lang_th">Thailändisch</string>
-    <string name="lang_vi">Vietnamesisch</string>
-    <string name="lang_sv">Schwedisch</string>
+    <string name="lang_th">Thai</string>
+    <string name="lang_vi">Vietnamese</string>
+    <string name="lang_sv">Swedish</string>
+
+    <!-- Settings – Sections -->
+    <string name="section_translation_service">Translation service</string>
+    <string name="section_libre_server">LibreTranslate server</string>
+    <string name="section_free_translations">FreeTranslations API key</string>
+    <string name="section_diagnostics">Diagnostics</string>
+    <string name="section_privacy">Privacy</string>
+
+    <!-- Settings – Buttons & Labels -->
+    <string name="provider_ml_kit">ML Kit (on-device)</string>
+    <string name="provider_libre_translate">LibreTranslate</string>
+    <string name="provider_free_translations">FreeTranslations</string>
+    <string name="label_server_url">Server URL</string>
+    <string name="label_api_key_optional">API key (optional)</string>
+    <string name="label_api_key">API key</string>
+    <string name="btn_save_url">Save URL</string>
+    <string name="btn_save_api_key">Save API key</string>
+    <string name="btn_test_server">Test server</string>
+    <string name="status_checking_server">Checking server…</string>
+    <string name="status_checking_free_translations">Checking FreeTranslations…</string>
+
+    <!-- Server test results -->
+    <string name="server_test_languages_ok">Server reachable - language list loaded.</string>
+    <string name="server_test_unexpected">Server reachable, but unexpected response.</string>
+    <string name="server_test_access_denied">Server reachable, but access denied. Check API key.</string>
+    <string name="server_test_endpoint_missing">Server reachable, but /languages endpoint not available.</string>
+    <string name="server_test_http_code">Server responded with HTTP %1$d.</string>
+    <string name="server_test_unreachable">Server not reachable. Check URL.</string>
+    <string name="server_test_unreachable_internet">Server not reachable. Check internet connection.</string>
+    <string name="server_test_error">Error: %1$s</string>
+    <string name="server_test_enter_url">Please enter server URL.</string>
+    <string name="server_test_enter_api_key">Please enter API key.</string>
+
+    <!-- FreeTranslations server test -->
+    <string name="freetranslations_test_ok">FreeTranslations server reachable.</string>
+    <string name="freetranslations_test_http_code">Server responded with HTTP %1$d.</string>
+
+    <!-- Clipboard diagnostics -->
+    <string name="clipboard_empty">No text in clipboard</string>
+    <string name="clipboard_no_text">Clipboard contains no text</string>
+    <string name="clipboard_text_found">Text found (%1$d characters): \"%2$s…\"</string>
+
+    <!-- Info texts -->
+    <string name="fdroid_no_mlkit">F-Droid build – no Google ML Kit included.</string>
+    <string name="libre_data_notice">With LibreTranslate, text is sent to the configured server.</string>
+    <string name="freetranslations_data_notice">FreeTranslations sends text to translate-pa.googleapis.com.</string>
 </resources>
