@@ -24,6 +24,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+private const val OVERLAY_TAG = "TranslationOverlay"
+
 class TranslationOverlayManager(
     private val context: Context,
     private val windowManager: WindowManager,
@@ -177,14 +179,22 @@ class TranslationOverlayManager(
         // Outside-Touch → Overlay schließen
         parent.setOnTouchListener { _, event ->
             if (event.action == MotionEvent.ACTION_OUTSIDE) {
-                Log.d("Overlay", "Outside touch → schließen")
+                Log.d(OVERLAY_TAG, "Outside touch -> close")
                 remove()
                 true
             } else false
         }
 
-        windowManager.addView(overlayView, overlayParams)
-        isAttached = true
+        try {
+            windowManager.addView(overlayView, overlayParams)
+            isAttached = true
+            Log.d(OVERLAY_TAG, "Translation overlay add success")
+        } catch (e: Exception) {
+            Log.w(OVERLAY_TAG, "Translation overlay add failed: ${e.message}")
+            overlayView = null
+            overlayParams = null
+            isAttached = false
+        }
     }
 
     /**
@@ -207,12 +217,18 @@ class TranslationOverlayManager(
     }
 
     fun remove() {
-        if (isAttached && overlayView != null) {
-            try { windowManager.removeView(overlayView) } catch (_: Exception) {}
-            overlayView = null
-            overlayParams = null
-            isAttached = false
+        val view = overlayView
+        if (view != null) {
+            try {
+                windowManager.removeView(view)
+                Log.d(OVERLAY_TAG, "Translation overlay remove success")
+            } catch (e: Exception) {
+                Log.w(OVERLAY_TAG, "Translation overlay remove ignored: ${e.message}")
+            }
         }
+        overlayView = null
+        overlayParams = null
+        isAttached = false
     }
 
     fun destroy() {
@@ -241,7 +257,7 @@ class TranslationOverlayManager(
                         x = initialX + (event.rawX - initialTouchX).toInt()
                         y = initialY + (event.rawY - initialTouchY).toInt()
                     }
-                    overlayView?.let { windowManager.updateViewLayout(it, overlayParams) }
+                    overlayView?.let { safeUpdateLayout(it) }
                 }
                 return true
             }
@@ -261,4 +277,13 @@ class TranslationOverlayManager(
     }
 
     private fun dpToPx(dp: Int): Int = (dp * context.resources.displayMetrics.density).toInt()
+
+    private fun safeUpdateLayout(view: View) {
+        try {
+            windowManager.updateViewLayout(view, overlayParams)
+        } catch (e: Exception) {
+            Log.w(OVERLAY_TAG, "Translation overlay update failed: ${e.message}")
+            remove()
+        }
+    }
 }

@@ -5,7 +5,7 @@
     <!-- Hauptbildschirm -->
     <string name="title">LoloTrans</string>
     <string name="description">Tippe auf die sichtbare Bubble, um deinen kopierten Text übersetzen zu lassen.\n\nDiese App liest die Zwischenablage nicht heimlich im Hintergrund. Erst wenn du die Bubble antippst, wird der aktuelle Inhalt der Zwischenablage gelesen und übersetzt.</string>
-    <string name="privacy_notice">Die App übersetzt kopierten Text erst, wenn du aktiv auf die sichtbare Bubble tippst. Die Zwischenablage wird nicht dauerhaft im Hintergrund überwacht. Es werden keine Daten an externe Server gesendet – die Übersetzung erfolgt auf dem Gerät.</string>
+    <string name="privacy_notice">Die App übersetzt kopierten Text erst, wenn du aktiv auf die sichtbare Bubble tippst. Die Zwischenablage wird nicht dauerhaft im Hintergrund überwacht. Je nach ausgewähltem Übersetzungsdienst wird der Text lokal übersetzt oder an den konfigurierten externen Dienst gesendet.</string>
 
     <!-- Berechtigung -->
     <string name="permission_status">Overlay-Berechtigung</string>
@@ -94,7 +94,6 @@
     <string name="section_privacy">Datenschutz</string>
 
     <!-- Einstellungen – Buttons & Labels -->
-    <string name="provider_ml_kit">ML Kit lokal</string>
     <string name="provider_libre_translate">LibreTranslate</string>
     <string name="label_server_url">Server-URL</string>
     <string name="label_api_key_optional">API-Key (optional)</string>
@@ -120,6 +119,5 @@
     <string name="clipboard_text_found">Text gefunden (%1$d Zeichen): \"%2$s…\"</string>
 
     <!-- Info-Texte -->
-    <string name="fdroid_no_mlkit">F-Droid-Build – kein Google ML Kit enthalten.</string>
     <string name="libre_data_notice">Bei LibreTranslate wird der Text an den eingestellten Server gesendet.</string>
 </resources>

@@ -35,7 +35,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 private const val TAG = "FloatingBubble"
 
@@ -55,6 +54,7 @@ class FloatingBubbleService : Service() {
     private var bubbleIcon: ImageView? = null
     private var isBubbleAttached = false
     private var currentBubbleSize = BubbleSize.M
+    private var isStopping = false
 
     // Trash
     private var trashView: View? = null
@@ -77,6 +77,8 @@ class FloatingBubbleService : Service() {
     private var touchSlop = 0
 
     companion object {
+        const val ACTION_START = "de.lolo.lolotrans.action.START_BUBBLE"
+        const val ACTION_STOP = "de.lolo.lolotrans.action.STOP_BUBBLE"
         const val EXTRA_SHOW_NOTIFICATION = "show_notification"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "translation_bubble_channel"
@@ -103,6 +105,17 @@ class FloatingBubbleService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action ?: ACTION_START) {
+            ACTION_STOP -> {
+                Log.d(TAG, "Stop requested startId=$startId")
+                requestStop(startId)
+                return START_NOT_STICKY
+            }
+            ACTION_START -> Log.d(TAG, "Start requested startId=$startId")
+            else -> Log.d(TAG, "Start requested with unknown action=${intent?.action}")
+        }
+
+        isStopping = false
         val showNotification = intent?.getBooleanExtra(EXTRA_SHOW_NOTIFICATION, false) ?: false
         if (showNotification) {
             Log.d(TAG, "startForeground: notificationId=$NOTIFICATION_ID")
@@ -117,19 +130,67 @@ class FloatingBubbleService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        // bubbleEnabled=false muss VOR serviceScope.cancel() gespeichert werden,
-        // sonst verliert die MainActivity den korrekten Zustand.
-        runBlocking {
-            settingsRepository.setBubbleEnabled(false)
-        }
-        Log.d(TAG, "onDestroy: bubbleEnabled=false gespeichert")
-        removeBubble()
-        hideTrashOverlay()
+        Log.d(TAG, "onDestroy: cleanup started")
+        cleanupOverlays()
         overlayManager.destroy()
         translationManager.close()
         serviceScope.cancel()
+        persistBubbleDisabledAsync()
         Log.d(TAG, "Bubble service destroyed")
         super.onDestroy()
+    }
+
+    private fun requestStop(startId: Int? = null) {
+        if (isStopping) {
+            Log.d(TAG, "Stop ignored: cleanup already running")
+            if (startId != null) stopSelfResult(startId) else stopSelf()
+            return
+        }
+        isStopping = true
+        cleanupOverlays()
+        persistBubbleDisabledAsync()
+        val stopRequested = if (startId != null) stopSelfResult(startId) else run {
+            stopSelf()
+            true
+        }
+        Log.d(TAG, "Stop completed requestedStopSelf=$stopRequested")
+    }
+
+    private fun cleanupOverlays() {
+        stopForegroundSafely()
+        removeBubble()
+        hideTrashOverlay()
+        overlayManager.remove()
+    }
+
+    private fun stopForegroundSafely() {
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (e: Exception) {
+            Log.w(TAG, "stopForeground ignored: ${e.message}")
+        }
+    }
+
+    private fun persistBubbleDisabledAsync() {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                settingsRepository.setBubbleEnabled(false)
+                Log.d(TAG, "bubbleEnabled=false gespeichert")
+            } catch (e: Exception) {
+                Log.w(TAG, "bubbleEnabled=false konnte nicht gespeichert werden: ${e.message}")
+            }
+        }
+    }
+
+    private fun persistBubbleEnabledAsync() {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                settingsRepository.setBubbleEnabled(true)
+                Log.d(TAG, "bubbleEnabled=true gespeichert")
+            } catch (e: Exception) {
+                Log.w(TAG, "bubbleEnabled=true konnte nicht gespeichert werden: ${e.message}")
+            }
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -181,26 +242,41 @@ class FloatingBubbleService : Service() {
     // ──────────────────────────────────────────────
 
     private fun showBubble() {
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
-            stopSelf()
+        if (isStopping) {
+            Log.d(TAG, "Start ignored: stop in progress")
             return
         }
-        if (isBubbleAttached) return
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w(TAG, "Start failed: overlay permission missing")
+            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
+            persistBubbleDisabledAsync()
+            requestStop()
+            return
+        }
+        if (isBubbleAttached) {
+            Log.d(TAG, "Start ignored: bubble already attached")
+            persistBubbleEnabledAsync()
+            return
+        }
 
         serviceScope.launch {
             try {
                 val size = settingsRepository.bubbleSize.first()
                 val posX = settingsRepository.getBubblePosX()
                 val posY = settingsRepository.getBubblePosY()
-                createBubbleView(size, posX, posY)
+                if (!isStopping) createBubbleView(size, posX, posY)
             } catch (e: Exception) {
-                createBubbleView(BubbleSize.M, 100, 200)
+                Log.w(TAG, "Start settings load failed, using fallback: ${e.message}")
+                if (!isStopping) createBubbleView(BubbleSize.M, 100, 200)
             }
         }
     }
 
     private fun createBubbleView(size: BubbleSize, posX: Int, posY: Int) {
+        if (isStopping) {
+            Log.d(TAG, "Bubble add skipped: stop in progress")
+            return
+        }
         if (isBubbleAttached) return
         currentBubbleSize = size
         val touchPx = dpToPx(size.touchDp)
@@ -249,18 +325,36 @@ class FloatingBubbleService : Service() {
 
         clampBubblePosition()
         Log.d(TAG, "Bubble start position: loaded=($posX,$posY) clamped=(${bubbleParams?.x},${bubbleParams?.y})")
-        windowManager.addView(bubbleView, bubbleParams)
-        isBubbleAttached = true
-    }
-
-    private fun removeBubble() {
-        if (isBubbleAttached && bubbleView != null) {
-            try { windowManager.removeView(bubbleView) } catch (_: Exception) {}
+        try {
+            windowManager.addView(bubbleView, bubbleParams)
+            isBubbleAttached = true
+            persistBubbleEnabledAsync()
+            Log.d(TAG, "Bubble add success")
+        } catch (e: Exception) {
+            Log.e(TAG, "Bubble add failed", e)
             bubbleView = null
             bubbleParams = null
             bubbleIcon = null
             isBubbleAttached = false
+            persistBubbleDisabledAsync()
+            requestStop()
         }
+    }
+
+    private fun removeBubble() {
+        val view = bubbleView
+        if (view != null) {
+            try {
+                windowManager.removeView(view)
+                Log.d(TAG, "Bubble remove success")
+            } catch (e: Exception) {
+                Log.w(TAG, "Bubble remove ignored: ${e.message}")
+            }
+        }
+        bubbleView = null
+        bubbleParams = null
+        bubbleIcon = null
+        isBubbleAttached = false
     }
 
     // ──────────────────────────────────────────────
@@ -298,7 +392,7 @@ class FloatingBubbleService : Service() {
                     bubbleParams?.x = rawX
                     bubbleParams?.y = rawY
                     clampBubblePosition()
-                    bubbleView?.let { windowManager.updateViewLayout(it, bubbleParams) }
+                    bubbleView?.let { safeUpdateBubbleLayout(it) }
 
                     // Hover-Hervorhebung: etwas großzügiger für optisches Feedback
                     val hover = isBubbleCenterOverTrash(TRASH_HOVER_TOLERANCE_DP)
@@ -338,7 +432,7 @@ class FloatingBubbleService : Service() {
                         Log.d(TAG, "Drop im Trash → stopSelf()")
                         hideTrashOverlay()
                         isDragging = false
-                        stopSelf()
+                        requestStop()
                         return true
                     }
 
@@ -350,7 +444,7 @@ class FloatingBubbleService : Service() {
                         val snapThreshold = dpToPx(24)
                         if (bubbleParams!!.x < snapThreshold) {
                             bubbleParams!!.x = 0
-                            bubbleView?.let { windowManager.updateViewLayout(it, bubbleParams) }
+                            bubbleView?.let { safeUpdateBubbleLayout(it) }
                             applyLeftEdgeOffsetIfDocked()
                             Log.d(TAG, "EdgeSnap: paramsX snapped to 0, translationX set")
                         }
@@ -444,9 +538,17 @@ class FloatingBubbleService : Service() {
             y = dpToPx(40) // Abstand vom unteren Rand
         }
 
-        windowManager.addView(trashView, trashParams)
-        isTrashAttached = true
-        Log.d(TAG, "Trash angezeigt")
+        try {
+            windowManager.addView(trashView, trashParams)
+            isTrashAttached = true
+            Log.d(TAG, "Trash add success")
+        } catch (e: Exception) {
+            Log.w(TAG, "Trash add failed: ${e.message}")
+            trashView = null
+            trashParams = null
+            isTrashAttached = false
+            trashHighlighted = false
+        }
     }
 
     private fun updateTrashAppearance(highlighted: Boolean) {
@@ -456,13 +558,27 @@ class FloatingBubbleService : Service() {
     }
 
     private fun hideTrashOverlay() {
-        if (isTrashAttached && trashView != null) {
-            try { windowManager.removeView(trashView) } catch (_: Exception) {}
-            trashView = null
-            trashParams = null
-            isTrashAttached = false
-            trashHighlighted = false
-            Log.d(TAG, "Trash entfernt")
+        val view = trashView
+        if (view != null) {
+            try {
+                windowManager.removeView(view)
+                Log.d(TAG, "Trash remove success")
+            } catch (e: Exception) {
+                Log.w(TAG, "Trash remove ignored: ${e.message}")
+            }
+        }
+        trashView = null
+        trashParams = null
+        isTrashAttached = false
+        trashHighlighted = false
+    }
+
+    private fun safeUpdateBubbleLayout(view: View) {
+        try {
+            windowManager.updateViewLayout(view, bubbleParams)
+        } catch (e: Exception) {
+            Log.w(TAG, "Bubble update failed, stopping service: ${e.message}")
+            requestStop()
         }
     }
 

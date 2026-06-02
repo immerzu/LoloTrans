@@ -1,23 +1,24 @@
 package de.lolo.lolotrans
 
 class MlKitTranslatorProvider : TranslatorProvider {
+    private val error = IllegalStateException("Provider not available in this build.")
+
     init {
-        throw IllegalStateException(
-            "ML Kit ist im F-Droid-Build nicht verfügbar. Bitte LibreTranslate verwenden.")
+        throw error
     }
 
     override suspend fun detectLanguage(text: String): Result<String> =
-        Result.failure(IllegalStateException("ML Kit nicht verfügbar."))
+        Result.failure(error)
 
     override suspend fun ensureModelReady(
         sourceLanguage: String, targetLanguage: String
     ): Result<Unit> =
-        Result.failure(IllegalStateException("ML Kit nicht verfügbar."))
+        Result.failure(error)
 
     override suspend fun translate(
         text: String, sourceLanguage: String, targetLanguage: String
     ): Result<String> =
-        Result.failure(IllegalStateException("ML Kit nicht verfügbar."))
+        Result.failure(error)
 
     override fun close() {}
 }

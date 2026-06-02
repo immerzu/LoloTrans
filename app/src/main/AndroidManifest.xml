@@ -4,7 +4,7 @@
     <!-- Overlay-Berechtigung für Floating-Bubble und Übersetzungsfenster -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- Internet nur für ML Kit Modell-Downloads -->
+    <!-- Internet for configured translation providers. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Benachrichtigungen: nötig für Foreground Service ab Android 13 -->

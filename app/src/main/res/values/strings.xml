@@ -5,7 +5,7 @@
     <!-- Main screen -->
     <string name="title">LoloTrans</string>
     <string name="description">Tap the visible bubble to translate your copied text.\n\nThis app does not secretly read your clipboard in the background. Only when you tap the bubble, the current clipboard content is read and translated.</string>
-    <string name="privacy_notice">The app only translates copied text when you actively tap the visible bubble. The clipboard is not continuously monitored in the background. No data is sent to external servers – translation runs on the device.</string>
+    <string name="privacy_notice">The app only translates copied text when you actively tap the visible bubble. The clipboard is not continuously monitored in the background. Depending on the selected translation service, text may be translated on-device or sent to the configured external service.</string>
 
     <!-- Permission -->
     <string name="permission_status">Overlay permission</string>
@@ -94,7 +94,6 @@
     <string name="section_privacy">Privacy</string>
 
     <!-- Settings – Buttons & Labels -->
-    <string name="provider_ml_kit">ML Kit (on-device)</string>
     <string name="provider_libre_translate">LibreTranslate</string>
     <string name="label_server_url">Server URL</string>
     <string name="label_api_key_optional">API key (optional)</string>
@@ -120,6 +119,5 @@
     <string name="clipboard_text_found">Text found (%1$d characters): \"%2$s…\"</string>
 
     <!-- Info texts -->
-    <string name="fdroid_no_mlkit">F-Droid build – no Google ML Kit included.</string>
     <string name="libre_data_notice">With LibreTranslate, text is sent to the configured server.</string>
 </resources>

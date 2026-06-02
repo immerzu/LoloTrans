@@ -9,11 +9,13 @@ class TranslationManager(
     private val getTranslationProvider: () -> TranslationProvider = {
         when (BuildConfig.DEFAULT_PROVIDER) {
             "ML_KIT" -> TranslationProvider.ML_KIT
+            "FREETRANSLATIONS" -> TranslationProvider.FREETRANSLATIONS
             else -> TranslationProvider.LIBRE_TRANSLATE
         }
     },
     private val getLibreBaseUrl: () -> String = { "" },
-    private val getLibreApiKey: () -> String = { "" }
+    private val getLibreApiKey: () -> String = { "" },
+    private val getExternalProviderApiKey: () -> String = { "" }
 ) {
     data class LanguageOption(val code: String, val labelResId: Int)
 
@@ -54,20 +56,18 @@ class TranslationManager(
         val desired = getTranslationProvider()
         val effective = when {
             !BuildConfig.ML_KIT_AVAILABLE && desired == TranslationProvider.ML_KIT -> TranslationProvider.LIBRE_TRANSLATE
+            !BuildConfig.EXTERNAL_PROVIDER_AVAILABLE && desired == TranslationProvider.FREETRANSLATIONS -> TranslationProvider.LIBRE_TRANSLATE
             else -> desired
         }
         if (currentProvider == null || currentProviderType != effective) {
             close()
             currentProviderType = effective
-            currentProvider = when (effective) {
-                TranslationProvider.ML_KIT -> MlKitTranslatorProvider()
-                TranslationProvider.LIBRE_TRANSLATE -> {
-                    LibreTranslateProvider(
-                        getBaseUrl = getLibreBaseUrl,
-                        getApiKey = getLibreApiKey
-                    )
-                }
-            }
+            currentProvider = createTranslatorProvider(
+                provider = effective,
+                getLibreBaseUrl = getLibreBaseUrl,
+                getLibreApiKey = getLibreApiKey,
+                getExternalProviderApiKey = getExternalProviderApiKey
+            )
             Log.d(TAG, "Provider created: $effective")
         }
         return currentProvider!!

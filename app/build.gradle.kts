@@ -12,8 +12,8 @@ android {
         applicationId = "de.lolo.lolotrans"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "2.0"
+        versionCode = 12
+        versionName = "2.1"
     }
 
     flavorDimensions += "distribution"
@@ -22,11 +22,19 @@ android {
         create("full") {
             dimension = "distribution"
             buildConfigField("boolean", "ML_KIT_AVAILABLE", "true")
+            buildConfigField("boolean", "EXTERNAL_PROVIDER_AVAILABLE", "false")
             buildConfigField("String", "DEFAULT_PROVIDER", "\"ML_KIT\"")
         }
         create("fdroid") {
             dimension = "distribution"
             buildConfigField("boolean", "ML_KIT_AVAILABLE", "false")
+            buildConfigField("boolean", "EXTERNAL_PROVIDER_AVAILABLE", "false")
+            buildConfigField("String", "DEFAULT_PROVIDER", "\"LIBRE_TRANSLATE\"")
+        }
+        create("github") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ML_KIT_AVAILABLE", "false")
+            buildConfigField("boolean", "EXTERNAL_PROVIDER_AVAILABLE", "true")
             buildConfigField("String", "DEFAULT_PROVIDER", "\"LIBRE_TRANSLATE\"")
         }
     }

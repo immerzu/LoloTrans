@@ -1,1 +1,1 @@
-Floating-bubble translator with on-device ML Kit translation
+Floating-bubble translator with configurable translation backend

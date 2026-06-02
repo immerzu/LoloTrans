@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="section_free_translations">FreeTranslations</string>
+    <string name="provider_free_translations">FreeTranslations.org</string>
+    <string name="label_api_key">API-Key</string>
+    <string name="free_translations_data_notice">Bei FreeTranslations.org wird der Text an translate-pa.googleapis.com gesendet.</string>
+</resources>

@@ -65,7 +65,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import de.lolo.lolotrans.BuildConfig
 import de.lolo.lolotrans.ui.theme.TranslatorAppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -76,15 +75,15 @@ import java.net.URL
 private const val TAG = "TranslatorApp"
 
 // Farbkonstanten für nicht-Theme-Elemente
-private val BgColor = Color(0xFF000000)
-private val CardBg = Color(0xFF0A0A0A)
-private val CardBorder = Color(0xFF333333)
-private val TextWhite = Color(0xFFFFFFFF)
-private val TextGray = Color(0xFFB8B8B8)
-private val TextDim = Color(0xFF666666)
-private val BtnBg = Color(0xFF111111)
-private val BtnBgActive = Color(0xFF222222)
-private val BtnBorder = Color(0xFF666666)
+internal val BgColor = Color(0xFF000000)
+internal val CardBg = Color(0xFF0A0A0A)
+internal val CardBorder = Color(0xFF333333)
+internal val TextWhite = Color(0xFFFFFFFF)
+internal val TextGray = Color(0xFFB8B8B8)
+internal val TextDim = Color(0xFF666666)
+internal val BtnBg = Color(0xFF111111)
+internal val BtnBgActive = Color(0xFF222222)
+internal val BtnBorder = Color(0xFF666666)
 
 class MainActivity : ComponentActivity() {
 
@@ -123,7 +122,10 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, R.string.permission_required, Toast.LENGTH_LONG).show()
             return
         }
-        val intent = Intent(this, FloatingBubbleService::class.java)
+        val intent = Intent(this, FloatingBubbleService::class.java).apply {
+            action = FloatingBubbleService.ACTION_START
+        }
+        Log.d(TAG, "Bubble start requested")
         startService(intent)
     }
 
@@ -133,7 +135,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopBubbleService() {
-        stopService(Intent(this, FloatingBubbleService::class.java))
+        val intent = Intent(this, FloatingBubbleService::class.java).apply {
+            action = FloatingBubbleService.ACTION_STOP
+        }
+        Log.d(TAG, "Bubble stop requested")
+        startService(intent)
     }
 }
 
@@ -164,7 +170,7 @@ fun MainScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(
-                            painter = painterResource(R.drawable.lolo_soft_logo),
+                            painter = painterResource(R.drawable.lolo_soft_ui_logo),
                             contentDescription = "Logo",
                             modifier = Modifier
                                 .size(36.dp)
@@ -241,7 +247,6 @@ fun MainScreen(
                         enabled = hasOverlayPermission && !bubbleEnabled,
                         onClick = {
                             onStartBubble()
-                            scope.launch { settingsRepository.setBubbleEnabled(true) }
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -250,7 +255,6 @@ fun MainScreen(
                         enabled = bubbleEnabled,
                         onClick = {
                             onStopBubble()
-                            scope.launch { settingsRepository.setBubbleEnabled(false) }
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -318,14 +322,15 @@ fun MainScreen(
                 SectionTitle(stringResource(R.string.section_translation_service))
                 Spacer(modifier = Modifier.height(6.dp))
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (BuildConfig.ML_KIT_AVAILABLE) {
-                        ProviderButton(stringResource(R.string.provider_ml_kit), translationProvider == TranslationProvider.ML_KIT,
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.ML_KIT) } })
-                    }
                     ProviderButton(stringResource(R.string.provider_libre_translate), translationProvider == TranslationProvider.LIBRE_TRANSLATE,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.LIBRE_TRANSLATE) } })
+                    FlavorProviderButtons(
+                        translationProvider = translationProvider,
+                        onProviderSelected = { provider ->
+                            scope.launch { settingsRepository.setTranslationProvider(provider) }
+                        }
+                    )
                 }
             }
 
@@ -413,6 +418,10 @@ fun MainScreen(
                 }
             }
 
+            FlavorProviderSettings(
+                settingsRepository = settingsRepository,
+                translationProvider = translationProvider
+            )
 
             // --- Datenschutzhinweis ---
             DarkCard {
@@ -535,7 +544,7 @@ fun BubbleSizeSelector(selectedSize: BubbleSize, onSizeSelected: (BubbleSize) ->
 }
 
 @Composable
-private fun ProviderButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ProviderButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Button(
         onClick = onClick,
         modifier = modifier,

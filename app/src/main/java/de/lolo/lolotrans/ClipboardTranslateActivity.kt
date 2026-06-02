@@ -134,16 +134,29 @@ class ClipboardTranslateActivity : Activity() {
         Log.d(TAG, "Clipboard-Text: ${clipboardText.length} Zeichen")
 
         val settingsRepo = SettingsRepository(applicationContext)
-        translationManager = TranslationManager()
+        val translationProvider = settingsRepo.effectiveTranslationProvider.first()
+        val libreBaseUrl = settingsRepo.libreTranslateBaseUrl.first()
+        val libreApiKey = settingsRepo.libreTranslateApiKey.first()
+        val externalProviderApiKey = settingsRepo.externalProviderApiKey.first()
+        translationManager = TranslationManager(
+            getTranslationProvider = { translationProvider },
+            getLibreBaseUrl = { libreBaseUrl },
+            getLibreApiKey = { libreApiKey },
+            getExternalProviderApiKey = { externalProviderApiKey }
+        )
         val sourceLang = settingsRepo.sourceLanguage.first()
         val targetLang = settingsRepo.targetLanguage.first()
 
         // 2. Quellsprache bestimmen
         val effectiveSource: String
         if (sourceLang == "auto") {
-            statusText.text = getString(R.string.identifying_language)
-            Log.d(TAG, "Auto-Modus: erkenne Sprache…")
-            val detected = translationManager.identifyLanguage(clipboardText)
+            if (supportsSourceAuto(translationProvider)) {
+                effectiveSource = "auto"
+                Log.d(TAG, "Auto-Modus: Provider $translationProvider erkennt die Quellsprache serverseitig")
+            } else {
+                statusText.text = getString(R.string.identifying_language)
+                Log.d(TAG, "Auto-Modus: erkenne Sprache...")
+                val detected = translationManager.identifyLanguage(clipboardText)
                 Log.d(PERF, "languageId=${System.currentTimeMillis() - t}ms")
                 t = System.currentTimeMillis()
                 if (detected == null) {
@@ -160,6 +173,7 @@ class ClipboardTranslateActivity : Activity() {
                 effectiveSource = detected
                 statusText.text = getString(R.string.identified_language, detected)
                 Log.d(TAG, "Erkannte Sprache: $detected -> mapped=$mapped")
+            }
         } else {
             effectiveSource = sourceLang
             Log.d(TAG, "Feste Quellsprache: $effectiveSource")
@@ -251,6 +265,10 @@ class ClipboardTranslateActivity : Activity() {
 
     /** Normalisiert Sprach-Tags für robusten Vergleich (lowercase, trim). */
     private fun normalizeTag(tag: String): String = tag.lowercase().trim()
+
+    private fun supportsSourceAuto(provider: TranslationProvider): Boolean =
+        provider == TranslationProvider.LIBRE_TRANSLATE ||
+            provider == TranslationProvider.FREETRANSLATIONS
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 }
