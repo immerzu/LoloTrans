@@ -1,6 +1,7 @@
 package de.lolo.lolotrans
 
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -89,11 +90,13 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var settingsRepository: SettingsRepository
     private var hasOverlayPermission by mutableStateOf(false)
+    private var hasAccessibilityPermission by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settingsRepository = SettingsRepository(this)
         hasOverlayPermission = Settings.canDrawOverlays(this)
+        hasAccessibilityPermission = isSelectionAccessibilityEnabled()
         Log.d(TAG, "onCreate: Overlay=$hasOverlayPermission")
         enableEdgeToEdge()
 
@@ -102,7 +105,9 @@ class MainActivity : ComponentActivity() {
                 MainScreen(
                     settingsRepository = settingsRepository,
                     hasOverlayPermission = hasOverlayPermission,
+                    hasAccessibilityPermission = hasAccessibilityPermission,
                     onGrantOverlayPermission = { openOverlaySettings() },
+                    onGrantAccessibilityPermission = { openAccessibilitySettings() },
                     onStartBubble = { startBubbleService() },
                     onStopBubble = { stopBubbleService() }
                 )
@@ -115,6 +120,7 @@ class MainActivity : ComponentActivity() {
         val newOverlay = Settings.canDrawOverlays(this)
         Log.d(TAG, "onResume: Overlay=$hasOverlayPermission→$newOverlay")
         hasOverlayPermission = newOverlay
+        hasAccessibilityPermission = isSelectionAccessibilityEnabled()
     }
 
     private fun startBubbleService() {
@@ -134,12 +140,25 @@ class MainActivity : ComponentActivity() {
             Uri.parse("package:$packageName")))
     }
 
+    private fun openAccessibilitySettings() {
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
     private fun stopBubbleService() {
         val intent = Intent(this, FloatingBubbleService::class.java).apply {
             action = FloatingBubbleService.ACTION_STOP
         }
         Log.d(TAG, "Bubble stop requested")
         startService(intent)
+    }
+
+    private fun isSelectionAccessibilityEnabled(): Boolean {
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        val expected = ComponentName(this, SelectionAccessibilityService::class.java).flattenToString()
+        return enabledServices.split(':').any { it.equals(expected, ignoreCase = true) }
     }
 }
 
@@ -148,7 +167,9 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(
     settingsRepository: SettingsRepository,
     hasOverlayPermission: Boolean,
+    hasAccessibilityPermission: Boolean,
     onGrantOverlayPermission: () -> Unit,
+    onGrantAccessibilityPermission: () -> Unit,
     onStartBubble: () -> Unit,
     onStopBubble: () -> Unit
 ) {
@@ -158,7 +179,7 @@ fun MainScreen(
     val targetLanguage by settingsRepository.targetLanguage.collectAsStateWithLifecycle(initialValue = "de")
     val sourceLanguage by settingsRepository.sourceLanguage.collectAsStateWithLifecycle(initialValue = "auto")
     val bubbleSize by settingsRepository.bubbleSize.collectAsStateWithLifecycle(initialValue = BubbleSize.M)
-    val bubbleEnabled by settingsRepository.bubbleEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val bubbleVisible by BubbleRuntimeState.isVisible.collectAsStateWithLifecycle(initialValue = false)
     val translationProvider by settingsRepository.effectiveTranslationProvider.collectAsStateWithLifecycle(initialValue = TranslationProvider.ML_KIT)
     val libreBaseUrl by settingsRepository.libreTranslateBaseUrl.collectAsStateWithLifecycle(initialValue = "")
     val libreApiKey by settingsRepository.libreTranslateApiKey.collectAsStateWithLifecycle(initialValue = "")
@@ -225,6 +246,17 @@ fun MainScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     DarkButton(stringResource(R.string.grant_permission), onClick = onGrantOverlayPermission)
                 }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = if (hasAccessibilityPermission) "✓ ${stringResource(R.string.accessibility_permission_granted)}"
+                    else "✗ ${stringResource(R.string.accessibility_permission_denied)}",
+                    color = if (hasAccessibilityPermission) TextWhite else TextDim,
+                    fontSize = 15.sp
+                )
+                if (!hasAccessibilityPermission) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    DarkButton(stringResource(R.string.grant_accessibility_permission), onClick = onGrantAccessibilityPermission)
+                }
             }
 
             Spacer(modifier = Modifier.height(1.dp))
@@ -235,16 +267,16 @@ fun MainScreen(
             DarkCard {
                 SectionTitle(stringResource(R.string.bubble_section))
                 Text(
-                    text = if (bubbleEnabled) "● ${stringResource(R.string.bubble_active)}"
+                    text = if (bubbleVisible) "● ${stringResource(R.string.bubble_active)}"
                     else "○ ${stringResource(R.string.bubble_inactive)}",
-                    color = if (bubbleEnabled) TextWhite else TextDim,
+                    color = if (bubbleVisible) TextWhite else TextDim,
                     fontSize = 15.sp
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DarkButton(
                         stringResource(R.string.start_bubble),
-                        enabled = hasOverlayPermission && !bubbleEnabled,
+                        enabled = hasOverlayPermission && !bubbleVisible,
                         onClick = {
                             onStartBubble()
                         },
@@ -252,7 +284,7 @@ fun MainScreen(
                     )
                     DarkButton(
                         stringResource(R.string.stop_bubble),
-                        enabled = bubbleEnabled,
+                        enabled = bubbleVisible,
                         onClick = {
                             onStopBubble()
                         },
@@ -325,6 +357,9 @@ fun MainScreen(
                     ProviderButton(stringResource(R.string.provider_libre_translate), translationProvider == TranslationProvider.LIBRE_TRANSLATE,
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.LIBRE_TRANSLATE) } })
+                    ProviderButton(stringResource(R.string.provider_telegram_bridge), translationProvider == TranslationProvider.TELEGRAM,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { scope.launch { settingsRepository.setTranslationProvider(TranslationProvider.TELEGRAM) } })
                     FlavorProviderButtons(
                         translationProvider = translationProvider,
                         onProviderSelected = { provider ->
@@ -414,6 +449,142 @@ fun MainScreen(
                     Text(
                         stringResource(R.string.libre_data_notice),
                         color = TextDim, fontSize = 12.sp
+                    )
+                }
+            }
+
+            // --- Telegram-Einstellungen ---
+            if (translationProvider == TranslationProvider.TELEGRAM) {
+                Spacer(modifier = Modifier.height(1.dp))
+                HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(1.dp))
+
+                DarkCard {
+                    SectionTitle(stringResource(R.string.section_telegram_login))
+                    remember { TelegramTdlibClient.start(); true }
+                    val authStatus by TelegramTdlibClient.authStatus.collectAsStateWithLifecycle(
+                        initialValue = TelegramAuthStatus.Starting
+                    )
+                    var phoneText by remember { mutableStateOf("") }
+                    var codeText by remember { mutableStateOf("") }
+                    var passwordText by remember { mutableStateOf("") }
+                    var loginResult by remember { mutableStateOf("") }
+
+                    Text(
+                        text = when (authStatus) {
+                            TelegramAuthStatus.Starting -> stringResource(R.string.telegram_status_starting)
+                            TelegramAuthStatus.WaitPhoneNumber -> stringResource(R.string.telegram_status_wait_phone)
+                            TelegramAuthStatus.WaitCode -> stringResource(R.string.telegram_status_wait_code)
+                            TelegramAuthStatus.WaitPassword -> stringResource(R.string.telegram_status_wait_password)
+                            TelegramAuthStatus.Ready -> stringResource(R.string.telegram_status_ready)
+                            is TelegramAuthStatus.Error -> (authStatus as TelegramAuthStatus.Error).message
+                        },
+                        color = TextGray,
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = phoneText,
+                        onValueChange = { phoneText = it },
+                        label = { Text(stringResource(R.string.label_telegram_phone), color = TextDim) },
+                        placeholder = { Text("+49123456789", color = TextDim) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite,
+                            focusedBorderColor = CardBorder,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = BgColor,
+                            unfocusedContainerColor = BgColor,
+                            focusedLabelColor = TextGray,
+                            unfocusedLabelColor = TextDim,
+                            cursorColor = TextWhite
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DarkButton(stringResource(R.string.btn_telegram_send_code), onClick = {
+                        scope.launch {
+                            loginResult = context.getString(R.string.telegram_status_sending)
+                            val result = TelegramTdlibClient.submitPhoneNumber(phoneText)
+                            loginResult = result.exceptionOrNull()?.message
+                                ?: context.getString(R.string.telegram_code_sent)
+                        }
+                    }, modifier = Modifier.fillMaxWidth())
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = codeText,
+                        onValueChange = { codeText = it },
+                        label = { Text(stringResource(R.string.label_telegram_code), color = TextDim) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite,
+                            focusedBorderColor = CardBorder,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = BgColor,
+                            unfocusedContainerColor = BgColor,
+                            focusedLabelColor = TextGray,
+                            unfocusedLabelColor = TextDim,
+                            cursorColor = TextWhite
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DarkButton(stringResource(R.string.btn_telegram_confirm_code), onClick = {
+                        scope.launch {
+                            val result = TelegramTdlibClient.submitCode(codeText)
+                            loginResult = result.exceptionOrNull()?.message
+                                ?: context.getString(R.string.telegram_code_confirmed)
+                        }
+                    }, modifier = Modifier.fillMaxWidth())
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = passwordText,
+                        onValueChange = { passwordText = it },
+                        label = { Text(stringResource(R.string.label_telegram_password), color = TextDim) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite,
+                            focusedBorderColor = CardBorder,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = BgColor,
+                            unfocusedContainerColor = BgColor,
+                            focusedLabelColor = TextGray,
+                            unfocusedLabelColor = TextDim,
+                            cursorColor = TextWhite
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DarkButton(stringResource(R.string.btn_telegram_confirm_password), onClick = {
+                        scope.launch {
+                            val result = TelegramTdlibClient.submitPassword(passwordText)
+                            loginResult = result.exceptionOrNull()?.message
+                                ?: context.getString(R.string.telegram_password_confirmed)
+                        }
+                    }, modifier = Modifier.fillMaxWidth())
+
+                    if (loginResult.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(loginResult, color = TextGray, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.telegram_login_data_notice),
+                        color = TextDim,
+                        fontSize = 12.sp
                     )
                 }
             }
@@ -587,4 +758,3 @@ private fun testLibreServer(baseUrl: String, apiKey: String): String {
         "Fehler: ${e.message?.take(80) ?: "unbekannt"}"
     }
 }
-

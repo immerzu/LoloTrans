@@ -4,6 +4,7 @@
 
     <!-- Hauptbildschirm -->
     <string name="title">LoloTrans</string>
+    <string name="process_text_label">LoloTrans</string>
     <string name="description">Tippe auf die sichtbare Bubble, um deinen kopierten Text übersetzen zu lassen.\n\nDiese App liest die Zwischenablage nicht heimlich im Hintergrund. Erst wenn du die Bubble antippst, wird der aktuelle Inhalt der Zwischenablage gelesen und übersetzt.</string>
     <string name="privacy_notice">Die App übersetzt kopierten Text erst, wenn du aktiv auf die sichtbare Bubble tippst. Die Zwischenablage wird nicht dauerhaft im Hintergrund überwacht. Je nach ausgewähltem Übersetzungsdienst wird der Text lokal übersetzt oder an den konfigurierten externen Dienst gesendet.</string>
 
@@ -13,6 +14,11 @@
     <string name="permission_denied">Berechtigung nicht erteilt</string>
     <string name="grant_permission">Overlay-Berechtigung erteilen</string>
     <string name="permission_required">Die Overlay-Berechtigung wird benötigt, um die Bubble über anderen Apps anzuzeigen.</string>
+    <string name="accessibility_permission_granted">Zugriff auf markierten Text aktiv</string>
+    <string name="accessibility_permission_denied">Zugriff auf markierten Text inaktiv</string>
+    <string name="grant_accessibility_permission">Zugriff auf markierten Text aktivieren</string>
+    <string name="accessibility_service_label">LoloTrans markierter Text</string>
+    <string name="accessibility_service_description">Erlaubt LoloTrans, markierten Text aus einer anderen App zu übersetzen, wenn du auf die Bubble tippst.</string>
 
     <!-- Sprache -->
     <string name="target_language">Zielsprache</string>
@@ -41,7 +47,9 @@
 
     <!-- Fehler -->
     <string name="no_text_clipboard">Keine Text-Zwischenablage gefunden. Bitte Text kopieren und Bubble antippen.</string>
+    <string name="no_text_selected_or_clipboard">Kein markierter Text und kein Text in der Zwischenablage gefunden. Bitte Text markieren oder kopieren und die Bubble antippen.</string>
     <string name="translating_clipboard">Übersetze Zwischenablage…</string>
+    <string name="translating_selection">Übersetze markierten Text…</string>
     <string name="translation_running">Übersetzung läuft…</string>
     <string name="clipboard_test">Zwischenablage testen</string>
     <string name="clipboard_test_result">Clipboard: %1$s</string>
@@ -90,17 +98,36 @@
     <!-- Einstellungen – Abschnitte -->
     <string name="section_translation_service">Übersetzungsdienst</string>
     <string name="section_libre_server">LibreTranslate-Server</string>
+    <string name="section_telegram_bridge">Telegram</string>
+    <string name="section_telegram_login">Telegram-Anmeldung</string>
     <string name="section_diagnostics">Diagnose</string>
     <string name="section_privacy">Datenschutz</string>
 
     <!-- Einstellungen – Buttons & Labels -->
     <string name="provider_libre_translate">LibreTranslate</string>
+    <string name="provider_telegram_bridge">Telegram</string>
     <string name="label_server_url">Server-URL</string>
+    <string name="label_bridge_url">Telegram-URL</string>
+    <string name="label_telegram_phone">Telefonnummer</string>
+    <string name="label_telegram_code">Telegram-Code</string>
+    <string name="label_telegram_password">2FA-Passwort</string>
     <string name="label_api_key_optional">API-Key (optional)</string>
     <string name="btn_save_url">URL speichern</string>
     <string name="btn_save_api_key">API-Key speichern</string>
     <string name="btn_test_server">Server testen</string>
     <string name="status_checking_server">Prüfe Server…</string>
+    <string name="btn_telegram_send_code">Telegram-Code anfordern</string>
+    <string name="btn_telegram_confirm_code">Code bestätigen</string>
+    <string name="btn_telegram_confirm_password">2FA-Passwort bestätigen</string>
+    <string name="telegram_status_starting">Telegram startet…</string>
+    <string name="telegram_status_wait_phone">Telegram-Telefonnummer eingeben.</string>
+    <string name="telegram_status_wait_code">Code aus Telegram eingeben.</string>
+    <string name="telegram_status_wait_password">Telegram-2FA-Passwort eingeben.</string>
+    <string name="telegram_status_ready">Telegram ist angemeldet.</string>
+    <string name="telegram_status_sending">Telegram-Code wird angefordert…</string>
+    <string name="telegram_code_sent">Telegram-Code wurde angefordert.</string>
+    <string name="telegram_code_confirmed">Telegram-Code wurde akzeptiert.</string>
+    <string name="telegram_password_confirmed">Telegram-Passwort wurde akzeptiert.</string>
 
     <!-- Server-Test Ergebnisse -->
     <string name="server_test_languages_ok">Server erreichbar - Sprachenliste geladen.</string>
@@ -120,4 +147,6 @@
 
     <!-- Info-Texte -->
     <string name="libre_data_notice">Bei LibreTranslate wird der Text an den eingestellten Server gesendet.</string>
+    <string name="telegram_bridge_data_notice">Text wird direkt von diesem Handy an Telegram zur Übersetzung gesendet.</string>
+    <string name="telegram_login_data_notice">Telegram-Anmeldung und Sessiondaten werden im privaten App-Speicher auf diesem Handy gespeichert. Text wird direkt von diesem Handy an Telegram zur Übersetzung gesendet.</string>
 </resources>
