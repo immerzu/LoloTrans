@@ -93,6 +93,7 @@ class FloatingBubbleService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        BubbleRuntimeState.setVisible(false)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         settingsRepository = SettingsRepository(this)
         translationManager = TranslationManager()
@@ -255,6 +256,7 @@ class FloatingBubbleService : Service() {
         }
         if (isBubbleAttached) {
             Log.d(TAG, "Start ignored: bubble already attached")
+            BubbleRuntimeState.setVisible(true)
             persistBubbleEnabledAsync()
             return
         }
@@ -328,6 +330,7 @@ class FloatingBubbleService : Service() {
         try {
             windowManager.addView(bubbleView, bubbleParams)
             isBubbleAttached = true
+            BubbleRuntimeState.setVisible(true)
             persistBubbleEnabledAsync()
             Log.d(TAG, "Bubble add success")
         } catch (e: Exception) {
@@ -336,6 +339,7 @@ class FloatingBubbleService : Service() {
             bubbleParams = null
             bubbleIcon = null
             isBubbleAttached = false
+            BubbleRuntimeState.setVisible(false)
             persistBubbleDisabledAsync()
             requestStop()
         }
@@ -355,6 +359,7 @@ class FloatingBubbleService : Service() {
         bubbleParams = null
         bubbleIcon = null
         isBubbleAttached = false
+        BubbleRuntimeState.setVisible(false)
     }
 
     // ──────────────────────────────────────────────
@@ -625,9 +630,40 @@ class FloatingBubbleService : Service() {
      */
     private fun handleBubbleClick() {
         Log.d(TAG, "handleBubbleClick → starte ClipboardTranslateActivity")
+
+        // 1. Synchron aus dem aktuellen Accessibility-Baum lesen
+        var selectedText = SelectionAccessibilityService.getCurrentSelectedText()
+
+        // 2. Fallback: aus dem letzten Event-Cache (mit Package-Prüfung)
+        if (selectedText.isNullOrBlank()) {
+            val currentPkg = SelectionAccessibilityService.getCurrentPackage()
+            selectedText = SelectionAccessibilityService.getRecentSelectedText(currentPackage = currentPkg)
+        }
+
+        // 3. Clipboard-Inhalt VOR ACTION_COPY sichern (für spätere Vergleichslogik)
+        val clipboardBefore = try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            cm?.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()
+        } catch (e: Exception) {
+            null
+        }
+
+        // 4. Cache als verbraucht markieren
+        if (!selectedText.isNullOrBlank()) {
+            SelectionAccessibilityService.consumeSelection()
+        }
+
+        // 5. Clipboard per ACTION_COPY als weiteren Fallback
+        val copiedSelection = SelectionAccessibilityService.copyCurrentSelectionToClipboard()
+
         val intent = Intent(this, ClipboardTranslateActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            putExtra(ClipboardTranslateActivity.EXTRA_SELECTION_COPY_REQUESTED, copiedSelection)
+            putExtra(ClipboardTranslateActivity.EXTRA_CLIPBOARD_BEFORE_COPY, clipboardBefore)
+            if (!selectedText.isNullOrBlank()) {
+                putExtra(ClipboardTranslateActivity.EXTRA_TEXT_TO_TRANSLATE, selectedText)
+            }
         }
         try {
             startActivity(intent)

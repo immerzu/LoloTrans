@@ -17,6 +17,7 @@
     <!-- Clipboard lesen (keine zusätzliche Berechtigung nötig, aber deklariert für Transparenz) -->
 
     <application
+        android:name=".LoloTransApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -41,6 +42,21 @@
             android:taskAffinity=""
             android:theme="@style/Theme.TranslatorApp.Dialog" />
 
+        <activity
+            android:name=".ProcessTextTranslateActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:icon="@drawable/overlay_button_sw"
+            android:label="@string/process_text_label"
+            android:taskAffinity=""
+            android:theme="@style/Theme.TranslatorApp.Dialog">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".FloatingBubbleService"
             android:exported="false"
@@ -48,6 +64,19 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Uebersetzungs-Bubble" />
+        </service>
+
+        <service
+            android:name=".SelectionAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/selection_accessibility_service" />
         </service>
 
     </application>
