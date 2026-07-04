@@ -35,6 +35,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val TAG = "FloatingBubble"
 
@@ -136,7 +137,6 @@ class FloatingBubbleService : Service() {
         overlayManager.destroy()
         translationManager.close()
         serviceScope.cancel()
-        persistBubbleDisabledAsync()
         Log.d(TAG, "Bubble service destroyed")
         super.onDestroy()
     }
@@ -173,9 +173,9 @@ class FloatingBubbleService : Service() {
     }
 
     private fun persistBubbleDisabledAsync() {
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        serviceScope.launch {
             try {
-                settingsRepository.setBubbleEnabled(false)
+                withContext(Dispatchers.IO) { settingsRepository.setBubbleEnabled(false) }
                 Log.d(TAG, "bubbleEnabled=false gespeichert")
             } catch (e: Exception) {
                 Log.w(TAG, "bubbleEnabled=false konnte nicht gespeichert werden: ${e.message}")
@@ -184,9 +184,9 @@ class FloatingBubbleService : Service() {
     }
 
     private fun persistBubbleEnabledAsync() {
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        serviceScope.launch {
             try {
-                settingsRepository.setBubbleEnabled(true)
+                withContext(Dispatchers.IO) { settingsRepository.setBubbleEnabled(true) }
                 Log.d(TAG, "bubbleEnabled=true gespeichert")
             } catch (e: Exception) {
                 Log.w(TAG, "bubbleEnabled=true konnte nicht gespeichert werden: ${e.message}")
@@ -637,7 +637,15 @@ class FloatingBubbleService : Service() {
         // 2. Fallback: aus dem letzten Event-Cache (mit Package-Prüfung)
         if (selectedText.isNullOrBlank()) {
             val currentPkg = SelectionAccessibilityService.getCurrentPackage()
-            selectedText = SelectionAccessibilityService.getRecentSelectedText(currentPackage = currentPkg)
+            val checkedPkg = currentPkg?.takeUnless { it == packageName || it == "com.android.systemui" }
+            selectedText = SelectionAccessibilityService.getRecentSelectedText(currentPackage = checkedPkg)
+            if (selectedText.isNullOrBlank() && checkedPkg != null) {
+                Log.w(TAG, "Cache fallback with package=$checkedPkg failed; retrying recent unscoped selection")
+                selectedText = SelectionAccessibilityService.getRecentSelectedText(
+                    maxAgeMs = 15_000L,
+                    currentPackage = null
+                )
+            }
         }
 
         // 3. Clipboard-Inhalt VOR ACTION_COPY sichern (für spätere Vergleichslogik)

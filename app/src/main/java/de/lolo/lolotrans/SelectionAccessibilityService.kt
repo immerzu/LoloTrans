@@ -4,11 +4,17 @@ import android.accessibilityservice.AccessibilityService
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.util.concurrent.CopyOnWriteArraySet
 
 private const val SELECTION_TAG = "SelectionAccessibility"
 
 class SelectionAccessibilityService : AccessibilityService() {
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         private const val MAX_SELECTED_TEXT_LENGTH = 100_000
@@ -44,12 +50,9 @@ class SelectionAccessibilityService : AccessibilityService() {
                 return null
             }
             val root = service.rootInActiveWindow
-            if (root == null) {
-                Log.w(SELECTION_TAG, "getCurrentSelectedText: rootInActiveWindow is NULL")
-                return null
-            }
-            val rootPkg = try { root.packageName?.toString() } catch (e: Exception) { "error" }
-            val result = service.collectSelectedText(root)
+            val rootPkg = try { root?.packageName?.toString() } catch (e: Exception) { "error" }
+            val result = service.collectSelectedTextFromAllWindows()
+                ?: service.collectSelectedText(root)
             if (result != null) {
                 Log.d(SELECTION_TAG, "getCurrentSelectedText: OK package=$rootPkg length=${result.length}")
             } else {
@@ -141,6 +144,19 @@ class SelectionAccessibilityService : AccessibilityService() {
                 if (normalized.isBlank()) {
                     return
                 }
+                val existing = lastSelectedText?.trim().orEmpty()
+                val samePackage = sourcePackage == null || lastSelectedPackage == null ||
+                    sourcePackage == lastSelectedPackage
+                val existingIsFresh = System.currentTimeMillis() - lastSelectedAtMs <= DEFAULT_MAX_AGE_MS
+                if (!lastSelectionConsumed && samePackage && existingIsFresh && existing.length > normalized.length) {
+                    val existingNorm = normalizeForCompare(existing)
+                    val normalizedNorm = normalizeForCompare(normalized)
+                    if (existingNorm.contains(normalizedNorm)) {
+                        lastSelectedAtMs = System.currentTimeMillis()
+                        Log.d(SELECTION_TAG, "storeSelectedText: keep longer cached selection existing=${existing.length} new=${normalized.length} pkg=$sourcePackage")
+                        return
+                    }
+                }
                 lastSelectedText = normalized
                 lastSelectedAtMs = System.currentTimeMillis()
                 lastSelectedPackage = sourcePackage
@@ -148,12 +164,24 @@ class SelectionAccessibilityService : AccessibilityService() {
                 Log.d(SELECTION_TAG, "storeSelectedText: length=${normalized.length} pkg=$sourcePackage consumed=reset")
             }
         }
+
+        private fun normalizeForCompare(text: String): String =
+            text.trim().lowercase().replace(Regex("\\s+"), " ")
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        activeService = this
+        connected = true
+        persistAccessibilityApprovedOnce()
+        Log.d(SELECTION_TAG, "Accessibility service created")
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         activeService = this
         connected = true
+        persistAccessibilityApprovedOnce()
         Log.d(SELECTION_TAG, "Accessibility service connected")
     }
 
@@ -162,7 +190,19 @@ class SelectionAccessibilityService : AccessibilityService() {
             activeService = null
         }
         connected = false
+        serviceScope.cancel()
         super.onDestroy()
+    }
+
+    private fun persistAccessibilityApprovedOnce() {
+        serviceScope.launch {
+            try {
+                SettingsRepository(applicationContext).setAccessibilityApprovedOnce(true)
+                Log.d(SELECTION_TAG, "accessibilityApprovedOnce=true gespeichert")
+            } catch (e: Exception) {
+                Log.w(SELECTION_TAG, "accessibilityApprovedOnce konnte nicht gespeichert werden: ${e.message}")
+            }
+        }
     }
 
     override fun onInterrupt() {
@@ -171,6 +211,14 @@ class SelectionAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        try {
+            handleAccessibilityEvent(event)
+        } catch (e: Exception) {
+            Log.e(SELECTION_TAG, "onAccessibilityEvent failed: ${e.message}", e)
+        }
+    }
+
+    private fun handleAccessibilityEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString().orEmpty()
         val type = event.eventType
         val isSelection = type == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED
@@ -213,6 +261,12 @@ class SelectionAccessibilityService : AccessibilityService() {
         return values.joinToString("\n").takeIf { it.isNotBlank() }
     }
 
+    private fun collectSelectedTextFromAllWindows(): String? {
+        val values = linkedSetOf<String>()
+        collectWindowRoots().forEach { root -> collectSelectedText(root, values) }
+        return values.joinToString("\n").takeIf { it.isNotBlank() }
+    }
+
     private fun collectSelectedText(node: AccessibilityNodeInfo?, values: MutableSet<String>) {
         if (node == null) return
         try {
@@ -241,13 +295,75 @@ class SelectionAccessibilityService : AccessibilityService() {
     }
 
     private fun copyCurrentSelectionToClipboardInternal(): Boolean {
-        val root = rootInActiveWindow ?: return false
-        val selectedNode = findSelectedNode(root)
-        val focusedNode = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-            ?: root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-        return performCopy(selectedNode)
-            || performCopy(focusedNode)
-            || performCopy(root)
+        if (clickCopyCommandInSelectionToolbar()) {
+            Log.d(SELECTION_TAG, "copyCurrentSelectionToClipboardInternal: toolbar copy clicked")
+            return true
+        }
+
+        for (root in collectWindowRoots()) {
+            val selectedNode = findSelectedNode(root)
+            val focusedNode = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                ?: root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
+            if (performCopy(selectedNode)
+                || performCopy(focusedNode)
+                || performCopy(findNodeWithCopyAction(root))
+                || performCopy(root)
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun clickCopyCommandInSelectionToolbar(): Boolean {
+        for (root in collectWindowRoots()) {
+            val copyNode = findCopyCommandNode(root)
+            if (copyNode != null && performClick(copyNode)) {
+                return true
+            }
+        }
+        Log.d(SELECTION_TAG, "clickCopyCommandInSelectionToolbar: no copy command found")
+        return false
+    }
+
+    private fun findCopyCommandNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (isCopyCommandNode(node)) return node
+        for (i in 0 until node.childCount) {
+            val found = findCopyCommandNode(node.getChild(i))
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun isCopyCommandNode(node: AccessibilityNodeInfo): Boolean {
+        val text = node.text?.toString()?.trim()?.lowercase().orEmpty()
+        val desc = node.contentDescription?.toString()?.trim()?.lowercase().orEmpty()
+        val viewId = node.viewIdResourceName?.lowercase().orEmpty()
+        val labelMatches = text in setOf("copy", "kopieren") ||
+            desc in setOf("copy", "kopieren") ||
+            viewId.contains("copy") ||
+            viewId.contains("kopieren") ||
+            node.actionList.any { actionMatchesCopy(it) }
+        return labelMatches
+    }
+
+    private fun performClick(node: AccessibilityNodeInfo?): Boolean {
+        var current = node
+        while (current != null) {
+            try {
+                if (current.isClickable || current.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }) {
+                    val clicked = current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    Log.d(SELECTION_TAG, "performClick copy command clicked=$clicked")
+                    if (clicked) return true
+                }
+            } catch (e: Exception) {
+                Log.w(SELECTION_TAG, "performClick failed: ${e.message}")
+                return false
+            }
+            current = current.parent
+        }
+        return false
     }
 
     private fun findSelectedNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
@@ -264,18 +380,60 @@ class SelectionAccessibilityService : AccessibilityService() {
     private fun performCopy(node: AccessibilityNodeInfo?): Boolean {
         if (node == null) return false
         return try {
-            node.performAction(AccessibilityNodeInfo.ACTION_COPY)
+            val explicitCopyAction = node.actionList.firstOrNull { actionMatchesCopy(it) }
+            val actionId = explicitCopyAction?.id ?: AccessibilityNodeInfo.ACTION_COPY
+            val copied = node.performAction(actionId)
+            Log.d(SELECTION_TAG, "performCopy action=$actionId copied=$copied")
+            copied
         } catch (e: Exception) {
             Log.w(SELECTION_TAG, "ACTION_COPY failed: ${e.message}")
             false
         }
     }
 
+    private fun findNodeWithCopyAction(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.actionList.any { actionMatchesCopy(it) }) return node
+        for (i in 0 until node.childCount) {
+            val found = findNodeWithCopyAction(node.getChild(i))
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun actionMatchesCopy(action: AccessibilityNodeInfo.AccessibilityAction): Boolean {
+        if (action.id == AccessibilityNodeInfo.ACTION_COPY) return true
+        val label = action.label?.toString()?.trim()?.lowercase().orEmpty()
+        return label == "copy" || label == "kopieren"
+    }
+
+    private fun collectWindowRoots(): List<AccessibilityNodeInfo> {
+        val roots = mutableListOf<AccessibilityNodeInfo>()
+        try {
+            windows?.mapNotNullTo(roots) { it.root }
+        } catch (e: Exception) {
+            Log.w(SELECTION_TAG, "windows read failed: ${e.message}")
+        }
+        rootInActiveWindow?.let { root ->
+            if (roots.none { it === root }) roots.add(root)
+        }
+        return roots
+    }
+
     private fun extractSelectedTextFromEvent(event: AccessibilityEvent): String? {
-        val text = event.text.joinToString("\n") { it.toString() }
-        val from = event.fromIndex
-        val to = event.toIndex
-        if (text.isBlank() || from < 0 || to <= from || from >= text.length) return null
-        return text.substring(from, to.coerceAtMost(text.length)).takeIf { it.isNotBlank() }
+        return try {
+            val text = event.text
+                .mapNotNull { item -> item?.toString()?.takeIf { it.isNotBlank() } }
+                .joinToString("\n")
+            val from = event.fromIndex
+            val to = event.toIndex
+            if (text.isBlank() || from < 0 || to <= from || from >= text.length) return null
+            val safeTo = to.coerceAtMost(text.length)
+            if (safeTo <= from) return null
+            text.substring(from, safeTo).takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Log.w(SELECTION_TAG, "extractSelectedTextFromEvent failed: ${e.message}")
+            null
+        }
     }
 }

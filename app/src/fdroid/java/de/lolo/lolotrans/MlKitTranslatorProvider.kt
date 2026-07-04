@@ -1,11 +1,7 @@
 package de.lolo.lolotrans
 
 class MlKitTranslatorProvider : TranslatorProvider {
-    private val error = IllegalStateException("Provider not available in this build.")
-
-    init {
-        throw error
-    }
+    private val error = IllegalStateException("ML Kit ist im F-Droid-Build nicht verfügbar.")
 
     override suspend fun detectLanguage(text: String): Result<String> =
         Result.failure(error)

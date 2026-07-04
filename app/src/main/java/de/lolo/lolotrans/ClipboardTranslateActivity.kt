@@ -182,9 +182,8 @@ class ClipboardTranslateActivity : Activity() {
         val clipboardBefore = intent.getStringExtra(EXTRA_CLIPBOARD_BEFORE_COPY)
         val copyRequested = intent.getBooleanExtra(EXTRA_SELECTION_COPY_REQUESTED, false)
         val copiedText = if (copyRequested) {
-            delay(350)
             statusText.text = getString(R.string.translating_clipboard)
-            val clip = readClipboardText()
+            val clip = waitForCopiedSelection(clipboardBefore)
             Log.d(TAG, "readClipboardText nach ACTION_COPY: ${if (clip != null) "${clip.length} Zeichen" else "null"}")
             clip
         } else {
@@ -224,7 +223,16 @@ class ClipboardTranslateActivity : Activity() {
         t = System.currentTimeMillis()
         if (textToTranslate.isNullOrEmpty()) {
             Log.d(TAG, "Kein markierter Text und kein Clipboard-Text")
-            showError(getString(R.string.no_text_selected_or_clipboard))
+            val accessibilityActive = AccessibilityStatus.isSelectionServiceEnabled(this@ClipboardTranslateActivity)
+            val message = if (!accessibilityActive) {
+                getString(R.string.accessibility_service_not_active)
+            } else {
+                if (!SelectionAccessibilityService.isConnected()) {
+                    Log.w(TAG, "Accessibility enabled in Android settings, but active service reference is unavailable")
+                }
+                getString(R.string.no_text_selected_or_clipboard)
+            }
+            showError(message)
             return
         }
         Log.d(TAG, "Text: ${textToTranslate.length} Zeichen")
@@ -371,6 +379,20 @@ class ClipboardTranslateActivity : Activity() {
         val clip = cm.primaryClip ?: return null
         if (clip.itemCount == 0) return null
         return clip.getItemAt(0).coerceToText(this)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    private suspend fun waitForCopiedSelection(previousClipboard: String?): String? {
+        var latest: String? = null
+        repeat(12) { attempt ->
+            delay(if (attempt == 0) 120 else 100)
+            latest = readClipboardText()
+            if (!latest.isNullOrBlank() && latest != previousClipboard) {
+                Log.d(TAG, "waitForCopiedSelection: changed after ${attempt + 1} attempts length=${latest.length}")
+                return latest
+            }
+        }
+        Log.w(TAG, "waitForCopiedSelection: clipboard unchanged")
+        return latest?.takeIf { it != previousClipboard }
     }
 
     private fun readRequestedText(): String? {

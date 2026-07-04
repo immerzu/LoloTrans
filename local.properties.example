@@ -1,0 +1,4 @@
+# Copy this file to local.properties for local full-flavor Telegram builds.
+# Keep local.properties private; it is ignored by Git and must not be committed.
+TELEGRAM_API_ID=0
+TELEGRAM_API_HASH=

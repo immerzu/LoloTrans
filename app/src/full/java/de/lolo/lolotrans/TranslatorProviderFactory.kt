@@ -12,4 +12,5 @@ internal fun createTranslatorProvider(
         getApiKey = getLibreApiKey
     )
     TranslationProvider.FREETRANSLATIONS -> DisabledTranslatorProvider("Provider not available in this build.")
+    TranslationProvider.TELEGRAM -> TelegramOnDeviceProvider()
 }

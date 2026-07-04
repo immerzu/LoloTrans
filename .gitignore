@@ -17,3 +17,7 @@ Ausgabe/*.apk
 *.apk
 *.aab
 *.log
+.codex/
+memory/
+handy_translation_*
+Zusatz/Screenshot_20260602_103453.jpg

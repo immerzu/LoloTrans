@@ -48,6 +48,7 @@
     <!-- Fehler -->
     <string name="no_text_clipboard">Keine Text-Zwischenablage gefunden. Bitte Text kopieren und Bubble antippen.</string>
     <string name="no_text_selected_or_clipboard">Kein markierter Text und kein Text in der Zwischenablage gefunden. Bitte Text markieren oder kopieren und die Bubble antippen.</string>
+    <string name="accessibility_service_not_active">Der Dienst für markierten Text ist nicht aktiv. Bitte LoloTrans in den Bedienungshilfen aktivieren.</string>
     <string name="translating_clipboard">Übersetze Zwischenablage…</string>
     <string name="translating_selection">Übersetze markierten Text…</string>
     <string name="translation_running">Übersetzung läuft…</string>

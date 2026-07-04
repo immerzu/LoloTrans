@@ -27,6 +27,7 @@ class SettingsRepository(private val context: Context) {
         private val KEY_AUTO_CLOSE_SECONDS = intPreferencesKey("auto_close_seconds")
         private val KEY_AUTO_CLOSE_ENABLED = booleanPreferencesKey("auto_close_enabled")
         private val KEY_BUBBLE_ENABLED = booleanPreferencesKey("bubble_enabled")
+        private val KEY_ACCESSIBILITY_APPROVED_ONCE = booleanPreferencesKey("accessibility_approved_once")
         private val KEY_SHOW_SERVICE_NOTIFICATION = booleanPreferencesKey("show_service_notification")
         private val KEY_TRANSLATION_PROVIDER = stringPreferencesKey("translation_provider")
         private val KEY_LIBRE_TRANSLATE_URL = stringPreferencesKey("libre_translate_url")
@@ -152,6 +153,15 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setBubbleEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_BUBBLE_ENABLED] = enabled }
+    }
+
+    // --- Bedienungshilfe einmal genehmigt ---
+    val accessibilityApprovedOnce: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_ACCESSIBILITY_APPROVED_ONCE] ?: false
+    }
+
+    suspend fun setAccessibilityApprovedOnce(approved: Boolean) {
+        context.dataStore.edit { it[KEY_ACCESSIBILITY_APPROVED_ONCE] = approved }
     }
 
     // --- Service-Benachrichtigung ---

@@ -47,11 +47,12 @@ immerzu (kesselflickerei@gmx.de)
 
 ## Build-Varianten
 
-Das Projekt bietet zwei Build-Flavors:
+Das Projekt bietet drei Build-Flavors:
 
 ### full (Standard)
 - Enthält Google ML Kit für On-Device-Übersetzung
 - Übersetzung läuft komplett lokal nach Modell-Download
+- Telegram ist nur im full-Flavor verfügbar. Für Telegram müssen echte Werte lokal in `local.properties` gesetzt werden; `local.properties` darf nicht committed werden. Ohne diese Werte baut der full-Flavor, Telegram meldet zur Laufzeit aber fehlende Zugangsdaten. Siehe `local.properties.example`.
 - APK ca. 77 MB (ML Kit Native-Libraries)
 
 ```bash
@@ -60,6 +61,7 @@ Das Projekt bietet zwei Build-Flavors:
 
 ### fdroid (F-Droid)
 - Enthält KEIN Google ML Kit und KEINE Google Play Services
+- Enthält wie der github-Flavor Telegram/TDLib nicht als nutzbaren Provider
 - Nutzt einen LibreTranslate-kompatiblen Server für Übersetzungen
 - Nutzer muss Server-URL in den Einstellungen konfigurieren
 - Text wird zur Übersetzung an den konfigurierten Server gesendet
@@ -68,6 +70,26 @@ Das Projekt bietet zwei Build-Flavors:
 ```bash
 ./gradlew assembleFdroidDebug
 ```
+
+### github
+- Enthält KEIN Google ML Kit und KEINE Google Play Services
+- Enthält wie der fdroid-Flavor Telegram/TDLib nicht als nutzbaren Provider
+- Nutzt LibreTranslate und den FreeTranslations-Provider
+
+```bash
+./gradlew assembleGithubDebug
+```
+
+### Telegram lokal konfigurieren
+
+Telegram-Zugangsdaten werden nicht im Repository gespeichert. Kopiere `local.properties.example` nach `local.properties` und trage dort deine eigenen Werte ein:
+
+```properties
+TELEGRAM_API_ID=0
+TELEGRAM_API_HASH=
+```
+
+Die Platzhalterwerte sind nicht nutzbar. Echte Werte gehören nur in die lokale `local.properties`.
 
 ## Build
 

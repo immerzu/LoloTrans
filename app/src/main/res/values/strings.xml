@@ -48,6 +48,7 @@
     <!-- Errors -->
     <string name="no_text_clipboard">No text found in clipboard. Please copy text and tap the bubble.</string>
     <string name="no_text_selected_or_clipboard">No selected text or clipboard text found. Select text or copy text, then tap the bubble.</string>
+    <string name="accessibility_service_not_active">The selected-text service is not active. Enable LoloTrans in Accessibility settings.</string>
     <string name="translating_clipboard">Translating clipboard…</string>
     <string name="translating_selection">Translating selected text…</string>
     <string name="translation_running">Translation in progress…</string>

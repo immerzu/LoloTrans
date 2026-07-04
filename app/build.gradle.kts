@@ -1,3 +1,22 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
+val telegramApiId: String = run {
+    val f = rootProject.file("local.properties")
+    if (!f.exists()) { "0" } else {
+        Properties().apply { f.inputStream().use { load(it) } }
+            .getProperty("TELEGRAM_API_ID", "0")
+    }
+}
+
+val telegramApiHash: String = run {
+    val f = rootProject.file("local.properties")
+    if (!f.exists()) { "" } else {
+        Properties().apply { f.inputStream().use { load(it) } }
+            .getProperty("TELEGRAM_API_HASH", "")
+    }
+}
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -6,14 +25,20 @@ plugins {
 
 android {
     namespace = "de.lolo.lolotrans"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "de.lolo.lolotrans"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "2.1"
+        versionCode = 13
+        versionName = "2.2"
+        buildConfigField("int", "TELEGRAM_API_ID", telegramApiId)
+        buildConfigField("String", "TELEGRAM_API_HASH", "\"$telegramApiHash\"")
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     flavorDimensions += "distribution"
@@ -54,10 +79,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -66,6 +87,12 @@ android {
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -87,6 +114,9 @@ dependencies {
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Telegram TDLib JSON wrapper with Android native libraries.
+    "fullImplementation"("io.github.xephosbot:tdlib-kmp:1.8.62")
 
     // ML Kit Translation (only in full flavor)
     "fullImplementation"("com.google.mlkit:translate:17.0.3")

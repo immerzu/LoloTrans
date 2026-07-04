@@ -14,4 +14,5 @@ internal fun createTranslatorProvider(
     TranslationProvider.FREETRANSLATIONS -> FreeTranslationsProvider(
         getApiKey = getExternalProviderApiKey
     )
+    TranslationProvider.TELEGRAM -> DisabledTranslatorProvider("Telegram ist in diesem Build nicht verfügbar.")
 }
