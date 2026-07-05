@@ -42,11 +42,13 @@ class ClipboardTranslateActivity : Activity() {
 
     companion object {
         const val EXTRA_TEXT_TO_TRANSLATE = "de.lolo.lolotrans.extra.TEXT_TO_TRANSLATE"
-        const val EXTRA_SELECTION_COPY_REQUESTED = "de.lolo.lolotrans.extra.SELECTION_COPY_REQUESTED"
-        const val EXTRA_CLIPBOARD_BEFORE_COPY = "de.lolo.lolotrans.extra.CLIPBOARD_BEFORE_COPY"
         const val MAX_TRANSLATE_TEXT_LENGTH = 100_000
         private const val TAG = "ClipboardActivity"
         private const val PERF = "Perf"
+
+        /** Referenz auf das aktuell aktive Übersetzungs-Overlay. */
+        @Volatile
+        private var activeOverlay: TranslationOverlayManager? = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,7 +132,7 @@ class ClipboardTranslateActivity : Activity() {
         })
 
         setContentView(root)
-        setFinishOnTouchOutside(false)
+        setFinishOnTouchOutside(true)
     }
 
     override fun onResume() {
@@ -179,43 +181,27 @@ class ClipboardTranslateActivity : Activity() {
         statusText.text = getString(R.string.translating_selection)
         val requestedText = readRequestedText()
         Log.d(TAG, "readRequestedText: ${if (requestedText != null) "${requestedText.length} Zeichen" else "null"}")
-        val clipboardBefore = intent.getStringExtra(EXTRA_CLIPBOARD_BEFORE_COPY)
-        val copyRequested = intent.getBooleanExtra(EXTRA_SELECTION_COPY_REQUESTED, false)
-        val copiedText = if (copyRequested) {
-            statusText.text = getString(R.string.translating_clipboard)
-            val clip = waitForCopiedSelection(clipboardBefore)
-            Log.d(TAG, "readClipboardText nach ACTION_COPY: ${if (clip != null) "${clip.length} Zeichen" else "null"}")
-            clip
-        } else {
-            null
-        }
-
         val textToTranslate = when {
-            requestedText != null && copiedText != null && copyRequested
-                && copiedText != clipboardBefore
-                && copiedText.length > requestedText.length
-                && isSameSelection(requestedText, copiedText) -> {
-                Log.d(TAG, "copiedText (${copiedText.length}) vollständiger als requestedText (${requestedText.length}) → verwende copiedText")
-                copiedText
-            }
             requestedText != null -> {
                 Log.d(TAG, "Verwende requestedText (${requestedText.length} Zeichen)")
                 requestedText
-            }
-            copiedText != null && copyRequested && copiedText != clipboardBefore -> {
-                Log.d(TAG, "Kein requestedText, copiedText verfügbar (${copiedText.length} Zeichen)")
-                copiedText
             }
             else -> {
                 statusText.text = getString(R.string.translating_clipboard)
                 Log.w(TAG, "Keine Selection-Quelle → Clipboard-Fallback")
                 val clip = readClipboardText()
                 if (clip != null) {
-                    Log.d(TAG, "Clipboard-Fallback: ${clip.length} Zeichen")
+                    if (SelectionAccessibilityService.isTextConsumed(clip)) {
+                        Log.d(TAG, "Clipboard-Fallback: Text bereits verbraucht → überspringe")
+                        null
+                    } else {
+                        Log.d(TAG, "Clipboard-Fallback: ${clip.length} Zeichen")
+                        clip
+                    }
                 } else {
                     Log.w(TAG, "Clipboard-Fallback: nichts in der Zwischenablage")
+                    null
                 }
-                clip
             }
         }
         Log.d(TAG, "textToTranslate: ${if (textToTranslate != null) "${textToTranslate.length} Zeichen" else "null"}")
@@ -232,7 +218,7 @@ class ClipboardTranslateActivity : Activity() {
                 }
                 getString(R.string.no_text_selected_or_clipboard)
             }
-            showError(message)
+            showError(message, showToast = false)
             return
         }
         Log.d(TAG, "Text: ${textToTranslate.length} Zeichen")
@@ -321,13 +307,16 @@ class ClipboardTranslateActivity : Activity() {
         t = System.currentTimeMillis()
         val shouldFinish = if (translationResult.isSuccess) {
             val resultText = translationResult.getOrThrow()
+            SelectionAccessibilityService.setConsumedText(textToTranslate)
             val equalsSource = resultText == textToTranslate
-            if (equalsSource && manuallySameLanguage) {
+            val overlayShown = if (equalsSource && manuallySameLanguage) {
                 Log.w(TAG, "Ergebnis identisch mit Quelle – zeige Warnung statt Originaltext")
                 showTranslationOverlay(getString(R.string.same_language_warning))
             } else {
                 showTranslationOverlay(resultText)
             }
+            SelectionAccessibilityService.clearConsumedSelectionAfterDelay()
+            overlayShown
         } else {
             val err = translationResult.exceptionOrNull()?.message ?: getString(R.string.translation_failed)
             Log.e(TAG, "Übersetzung fehlgeschlagen: $err")
@@ -340,11 +329,13 @@ class ClipboardTranslateActivity : Activity() {
         }
     }
 
-    private fun showError(message: String) {
+    private fun showError(message: String, showToast: Boolean = true) {
         progressBar.visibility = android.view.View.GONE
         statusText.text = message
         closeButton.visibility = android.view.View.VISIBLE
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        if (showToast) {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun showTranslationOverlay(text: String): Boolean {
@@ -356,7 +347,11 @@ class ClipboardTranslateActivity : Activity() {
         try {
             val wm = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
             val repo = SettingsRepository(applicationContext)
-            TranslationOverlayManager(applicationContext, wm, repo).show(text)
+            // Vorheriges Overlay entfernen (z.B. von einer vorherigen Activity-Instanz)
+            activeOverlay?.remove()
+            val newOverlay = TranslationOverlayManager(applicationContext, wm, repo)
+            newOverlay.show(text)
+            activeOverlay = newOverlay
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Overlay fehlgeschlagen", e)
@@ -381,73 +376,11 @@ class ClipboardTranslateActivity : Activity() {
         return clip.getItemAt(0).coerceToText(this)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
     }
 
-    private suspend fun waitForCopiedSelection(previousClipboard: String?): String? {
-        var latest: String? = null
-        repeat(12) { attempt ->
-            delay(if (attempt == 0) 120 else 100)
-            latest = readClipboardText()
-            if (!latest.isNullOrBlank() && latest != previousClipboard) {
-                Log.d(TAG, "waitForCopiedSelection: changed after ${attempt + 1} attempts length=${latest.length}")
-                return latest
-            }
-        }
-        Log.w(TAG, "waitForCopiedSelection: clipboard unchanged")
-        return latest?.takeIf { it != previousClipboard }
-    }
-
     private fun readRequestedText(): String? {
         return intent.getStringExtra(EXTRA_TEXT_TO_TRANSLATE)
             ?.trim()
             ?.take(MAX_TRANSLATE_TEXT_LENGTH)
             ?.takeIf { it.isNotEmpty() }
-    }
-
-    /**
-     * Prüft, ob [copiedText] plausibel dieselbe Markierung wie [requestedText]
-     * vollständiger enthält.
-     *
-     * Kriterien (nach Normalisierung: trim + lowercase + whitespace-Collapse):
-     * 1. [copiedText] enthält [requestedText] als Teilstring.
-     * 2. Oder umgekehrt (unwahrscheinlich, aber sicher).
-     * 3. Oder ≥70% der Zeichen des kürzeren Texts kommen im längeren vor.
-     *    (Mindestens 5 Zeichen, damit zufällige Kurz-Treffer ausgeschlossen sind.)
-     *
-     * Fall A: Beide gleich lang → checked nur als Fail durch (Z.1/2 schlagen fehl
-     *         da copiedText.length > requestedText.length bereits vorher geprüft).
-     * Fall B: copiedText enthält requestedText → true (Z.1).
-     * Fall C: copiedText länger, aber kein Overlap → false (Z.3 schlägt fehl).
-     * Fall D: requestedText fehlt → wird nicht aufgerufen.
-     * Fall E: ACTION_COPY schlug fehl → copiedText ist nicht von aktueller
-     *         Selection (Overlap fehlt) → false.
-     */
-    private fun isSameSelection(requestedText: String, copiedText: String): Boolean {
-        fun normalize(s: String) = s.trim()
-            .lowercase()
-            .replace(Regex("\\s+"), " ")
-        val normReq = normalize(requestedText)
-        val normCopy = normalize(copiedText)
-
-        // 1. Exakte enthalten-Prüfung (Normalfall)
-        if (normCopy.contains(normReq)) return true
-        if (normReq.contains(normCopy)) return true
-
-        // 2. Overlap-Prüfung: 70% des kürzeren Texts.
-        //    Nur bei mindestens 6 Zeichen im kürzeren Text, da sonst die
-        //    minimale Overlap-Länge (5) nicht in den String passt
-        //    und coerceIn(5, shorterLen) mit 5 > shorterLen crashen würde.
-        val shorter = if (normReq.length <= normCopy.length) normReq else normCopy
-        val longer = if (normReq.length <= normCopy.length) normCopy else normReq
-        if (shorter.length < 6) return false
-
-        val minOverlap = (shorter.length * 0.7).toInt().coerceIn(5, shorter.length)
-
-        for (i in 0..shorter.length - minOverlap) {
-            if (longer.contains(shorter.substring(i, i + minOverlap))) {
-                Log.d(TAG, "isSameSelection: Overlap bei Index $i ($minOverlap Zeichen)")
-                return true
-            }
-        }
-        return false
     }
 
     private fun finishAndCleanup() {

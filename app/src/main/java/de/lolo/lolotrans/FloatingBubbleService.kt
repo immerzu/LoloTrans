@@ -104,6 +104,8 @@ class FloatingBubbleService : Service() {
         pngAlphaBounds = analyzePngAlphaBounds(R.drawable.overlay_button_sw)
         createNotificationChannel()
         startBubbleSizeObserver()
+        // Clipboard-Inhalt beim Service-Start als Baseline markieren → nicht übersetzen
+        markInitialClipboardAsConsumed()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -629,46 +631,26 @@ class FloatingBubbleService : Service() {
      * eingeschränkt und funktioniert nicht zuverlässig.
      */
     private fun handleBubbleClick() {
-        Log.d(TAG, "handleBubbleClick → starte ClipboardTranslateActivity")
+        Log.d(TAG, "handleBubbleClick -> starte ClipboardTranslateActivity")
 
-        // 1. Synchron aus dem aktuellen Accessibility-Baum lesen
-        var selectedText = SelectionAccessibilityService.getCurrentSelectedText()
+        // 1. Internen Auswahltext-Cache bevorzugen.
+        val currentPkg = SelectionAccessibilityService.getCurrentPackage()
+        val checkedPkg = currentPkg?.takeUnless { it == packageName || it == "com.android.systemui" }
+        var selectedText = SelectionAccessibilityService.getRecentSelectedText(currentPackage = checkedPkg)
 
-        // 2. Fallback: aus dem letzten Event-Cache (mit Package-Prüfung)
+        // 2. Falls der Cache leer ist, synchron aus dem aktuellen Accessibility-Baum lesen.
         if (selectedText.isNullOrBlank()) {
-            val currentPkg = SelectionAccessibilityService.getCurrentPackage()
-            val checkedPkg = currentPkg?.takeUnless { it == packageName || it == "com.android.systemui" }
-            selectedText = SelectionAccessibilityService.getRecentSelectedText(currentPackage = checkedPkg)
-            if (selectedText.isNullOrBlank() && checkedPkg != null) {
-                Log.w(TAG, "Cache fallback with package=$checkedPkg failed; retrying recent unscoped selection")
-                selectedText = SelectionAccessibilityService.getRecentSelectedText(
-                    maxAgeMs = 15_000L,
-                    currentPackage = null
-                )
-            }
+            selectedText = SelectionAccessibilityService.getCurrentSelectedText()
         }
 
-        // 3. Clipboard-Inhalt VOR ACTION_COPY sichern (für spätere Vergleichslogik)
-        val clipboardBefore = try {
-            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-            cm?.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()
-        } catch (e: Exception) {
-            null
-        }
-
-        // 4. Cache als verbraucht markieren
+        // 3. Cache als verbraucht markieren, wenn er für diesen Bubble-Tap genutzt wird.
         if (!selectedText.isNullOrBlank()) {
             SelectionAccessibilityService.consumeSelection()
         }
 
-        // 5. Clipboard per ACTION_COPY als weiteren Fallback
-        val copiedSelection = SelectionAccessibilityService.copyCurrentSelectionToClipboard()
-
         val intent = Intent(this, ClipboardTranslateActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            putExtra(ClipboardTranslateActivity.EXTRA_SELECTION_COPY_REQUESTED, copiedSelection)
-            putExtra(ClipboardTranslateActivity.EXTRA_CLIPBOARD_BEFORE_COPY, clipboardBefore)
             if (!selectedText.isNullOrBlank()) {
                 putExtra(ClipboardTranslateActivity.EXTRA_TEXT_TO_TRANSLATE, selectedText)
             }
@@ -678,6 +660,26 @@ class FloatingBubbleService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Fehler beim Starten der ClipboardTranslateActivity", e)
             Toast.makeText(this, R.string.translation_error, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Markiert den initialen Clipboard-Inhalt beim Service-Start als verbraucht,
+     * damit alter, vor LoloTrans vorhandener Zwischenablage-Inhalt nicht
+     * automatisch übersetzt wird. Nur plain text wird erfasst; falls das Lesen
+     * fehlschlägt (z.B. Android 12+ Background-Restriktion), bleibt die Baseline
+     * leer, und das alte Verhalten (unmarkiert) tritt ein – akzeptabel.
+     */
+    private fun markInitialClipboardAsConsumed() {
+        try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = cm.primaryClip ?: return
+            if (clip.itemCount == 0) return
+            val text = clip.getItemAt(0).coerceToText(this)?.toString()?.trim()?.takeIf { it.isNotEmpty() } ?: return
+            SelectionAccessibilityService.setConsumedText(text)
+            Log.d(TAG, "Initial clipboard text marked as consumed (baseline, length=${text.length})")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not mark initial clipboard baseline: ${e.message}")
         }
     }
 

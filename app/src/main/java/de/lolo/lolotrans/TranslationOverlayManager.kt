@@ -36,12 +36,16 @@ class TranslationOverlayManager(
     private var isAttached = false
     private val scopeJob = SupervisorJob()
     private val scope = CoroutineScope(scopeJob + Dispatchers.Main)
+    private var containerParams: FrameLayout.LayoutParams? = null
 
-    private var initialX = 0
-    private var initialY = 0
+    private var initialCardLeft = 0
+    private var initialCardTop = 0
     private var initialTouchX = 0f
     private var initialTouchY = 0f
     private var isDragging = false
+
+    /** SystemUI‑Callback‑Referenz, bei remove() zu deregistrieren. */
+    private var systemUiCallback: (() -> Unit)? = null
 
     fun show(translatedText: String) {
         remove()
@@ -57,10 +61,15 @@ class TranslationOverlayManager(
     }
 
     private fun createOverlayView(translatedText: String, posX: Int, posY: Int) {
-        // ── Root ──
-        val parent = FrameLayout(context).apply { id = View.generateViewId() }
+        // ── SystemUI‑Callback registrieren (Navigation/Home schliesst Overlay) ──
+        val closeOnSystemUi: () -> Unit = { remove() }
+        systemUiCallback = closeOnSystemUi
+        SelectionAccessibilityService.addSystemUiWindowCallback(closeOnSystemUi)
 
-        // ── Haupt-Container ──
+        val cardWidth = dpToPx(320)
+
+        // ── Haupt-Container (sichtbare Karte) VOR dem Root erstellen,
+        //     damit der Touch-Listener die Kartenposition ermitteln kann ──
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 0, 0, 0)
@@ -72,6 +81,8 @@ class TranslationOverlayManager(
             }
             background = bg
             elevation = dpToPx(6).toFloat()
+            // Karte frisst Klicks, damit der transparente Root sie nicht schliesst
+            isClickable = true
         }
 
         // ── Kopfzeile mit Titel + X-Button ──
@@ -158,31 +169,59 @@ class TranslationOverlayManager(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         container.addView(buttonRow)
-        parent.addView(container)
+
+        // ── Root (fullscreen, transparent) mit Touch-Listener für Außentipp ──
+        val parent = FrameLayout(context).apply {
+            id = View.generateViewId()
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            // Touch-Handling: Tipp außerhalb der Karte schließt das Overlay.
+            // Der Listener vergleicht die Touch-Koordinaten mit den Bildschirmkoordinaten
+            // der Karte. Ein Tipp auf transparentem Bereich (außerhalb der Karte) ruft
+            // remove() auf.
+            setOnTouchListener { _, event ->
+                if (event.action == MotionEvent.ACTION_DOWN) {
+                    val touchX = event.rawX.toInt()
+                    val touchY = event.rawY.toInt()
+                    val cardLoc = IntArray(2)
+                    try {
+                        container.getLocationOnScreen(cardLoc)
+                    } catch (e: Exception) {
+                        return@setOnTouchListener false
+                    }
+                    val insideCard = touchX in cardLoc[0]..(cardLoc[0] + container.width) &&
+                        touchY in cardLoc[1]..(cardLoc[1] + container.height)
+                    if (!insideCard) {
+                        remove()
+                        return@setOnTouchListener true
+                    }
+                }
+                false // Touch innerhalb der Karte nicht konsumieren
+            }
+        }
+
+        // Karte im Root positionieren
+        val cardLp = FrameLayout.LayoutParams(cardWidth, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.TOP or Gravity.START
+            leftMargin = posX.coerceIn(0, getScreenWidth() - cardWidth)
+            topMargin = posY.coerceIn(0, getScreenHeight())
+        }
+        parent.addView(container, cardLp)
+        containerParams = cardLp
         overlayView = parent
 
-        // ── WindowManager-Parameter ──
+        // ── WindowManager-Parameter (fullscreen, transparent) ──
         overlayParams = WindowManager.LayoutParams(
-            dpToPx(320),
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = posX
-            y = posY
-            width = dpToPx(320)
-        }
-
-        // Outside-Touch → Overlay schließen
-        parent.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_OUTSIDE) {
-                Log.d(OVERLAY_TAG, "Outside touch -> close")
-                remove()
-                true
-            } else false
+            x = 0
+            y = 0
         }
 
         try {
@@ -191,9 +230,7 @@ class TranslationOverlayManager(
             Log.d(OVERLAY_TAG, "Translation overlay add success")
         } catch (e: Exception) {
             Log.w(OVERLAY_TAG, "Translation overlay add failed: ${e.message}")
-            overlayView = null
-            overlayParams = null
-            isAttached = false
+            cleanup()
         }
     }
 
@@ -217,6 +254,7 @@ class TranslationOverlayManager(
     }
 
     fun remove() {
+        cleanup()
         val view = overlayView
         if (view != null) {
             try {
@@ -228,7 +266,13 @@ class TranslationOverlayManager(
         }
         overlayView = null
         overlayParams = null
+        containerParams = null
         isAttached = false
+    }
+
+    private fun cleanup() {
+        systemUiCallback?.let { SelectionAccessibilityService.removeSystemUiWindowCallback(it) }
+        systemUiCallback = null
     }
 
     fun destroy() {
@@ -239,10 +283,11 @@ class TranslationOverlayManager(
     fun isShowing(): Boolean = isAttached
 
     private fun handleDrag(event: MotionEvent): Boolean {
+        val cardParams = containerParams ?: return false
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                initialX = overlayParams?.x ?: 0
-                initialY = overlayParams?.y ?: 0
+                initialCardLeft = cardParams.leftMargin
+                initialCardTop = cardParams.topMargin
                 initialTouchX = event.rawX
                 initialTouchY = event.rawY
                 isDragging = false
@@ -253,11 +298,14 @@ class TranslationOverlayManager(
                 val dy = Math.abs(event.rawY - initialTouchY)
                 if (dx > 10f || dy > 10f) isDragging = true
                 if (isDragging) {
-                    overlayParams?.apply {
-                        x = initialX + (event.rawX - initialTouchX).toInt()
-                        y = initialY + (event.rawY - initialTouchY).toInt()
-                    }
-                    overlayView?.let { safeUpdateLayout(it) }
+                    val newLeft = (initialCardLeft + (event.rawX - initialTouchX).toInt())
+                        .coerceIn(0, getScreenWidth() - cardParams.width)
+                    val newTop = (initialCardTop + (event.rawY - initialTouchY).toInt())
+                        .coerceIn(0, getScreenHeight())
+                    cardParams.leftMargin = newLeft
+                    cardParams.topMargin = newTop
+                    // Layout im Parent FrameLayout aktualisieren
+                    (overlayView as? ViewGroup)?.requestLayout()
                 }
                 return true
             }
@@ -265,8 +313,8 @@ class TranslationOverlayManager(
                 if (isDragging) {
                     scope.launch {
                         settingsRepository.saveOverlayPosition(
-                            overlayParams?.x ?: initialX,
-                            overlayParams?.y ?: initialY
+                            cardParams.leftMargin,
+                            cardParams.topMargin
                         )
                     }
                 }
@@ -276,14 +324,11 @@ class TranslationOverlayManager(
         return false
     }
 
-    private fun dpToPx(dp: Int): Int = (dp * context.resources.displayMetrics.density).toInt()
+    private fun getScreenWidth(): Int =
+        context.resources.displayMetrics.widthPixels
 
-    private fun safeUpdateLayout(view: View) {
-        try {
-            windowManager.updateViewLayout(view, overlayParams)
-        } catch (e: Exception) {
-            Log.w(OVERLAY_TAG, "Translation overlay update failed: ${e.message}")
-            remove()
-        }
-    }
+    private fun getScreenHeight(): Int =
+        context.resources.displayMetrics.heightPixels
+
+    private fun dpToPx(dp: Int): Int = (dp * context.resources.displayMetrics.density).toInt()
 }

@@ -15,7 +15,7 @@ class TelegramOnDeviceProvider : TranslatorProvider {
         targetLanguage: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
         TelegramTdlibClient.start()
-        if (TelegramTdlibClient.authStatus.value == TelegramAuthStatus.Ready) {
+        if (TelegramTdlibClient.awaitAuthStatusReady() == TelegramAuthStatus.Ready) {
             Result.success(Unit)
         } else {
             Result.failure(IllegalStateException("Telegram ist noch nicht angemeldet. Bitte in den Einstellungen anmelden."))
@@ -28,5 +28,7 @@ class TelegramOnDeviceProvider : TranslatorProvider {
         targetLanguage: String
     ): Result<String> = TelegramTdlibClient.translate(text, targetLanguage)
 
-    override fun close() { TelegramTdlibClient.stop() }
+    override fun close() {
+        // TDLib keeps the Telegram login session and auth state for subsequent translations.
+    }
 }

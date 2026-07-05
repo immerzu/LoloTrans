@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.CopyOnWriteArraySet
 
@@ -17,8 +18,8 @@ class SelectionAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
-        private const val MAX_SELECTED_TEXT_LENGTH = 100_000
-        private const val DEFAULT_MAX_AGE_MS = 120_000L // 2 Minuten (vorher 30s)
+        private const val MAX_SELECTED_TEXT_LENGTH = 10_000
+        private const val DEFAULT_MAX_AGE_MS = 30_000L
         private val lock = Any()
 
         @Volatile
@@ -30,18 +31,11 @@ class SelectionAccessibilityService : AccessibilityService() {
         private var lastSelectionConsumed: Boolean = false
         private val systemUiCallbacks = CopyOnWriteArraySet<() -> Unit>()
 
-        fun isConnected(): Boolean = connected
+        /** Text, der nach erfolgreicher Übersetzung nicht erneut aus Clipboard verwendet werden darf. */
+        @Volatile
+        private var consumedText: String? = null
 
-        fun copyCurrentSelectionToClipboard(): Boolean {
-            val service = activeService
-            if (service == null) {
-                Log.w(SELECTION_TAG, "copyCurrentSelectionToClipboard: activeService is NULL")
-                return false
-            }
-            val result = service.copyCurrentSelectionToClipboardInternal()
-            Log.d(SELECTION_TAG, "copyCurrentSelectionToClipboard: result=$result")
-            return result
-        }
+        fun isConnected(): Boolean = connected
 
         fun getCurrentSelectedText(): String? {
             val service = activeService
@@ -65,7 +59,7 @@ class SelectionAccessibilityService : AccessibilityService() {
          * Liefert den gecachten markierten Text, wenn:
          * - Text vorhanden ist
          * - nicht bereits per [consumeSelection] verbraucht
-         * - innerhalb der TTL (default 120s)
+         * - innerhalb der TTL (default 30s)
          * - [currentPackage] stimmt mit dem Paket der Selection überein (oder einer von beiden ist null)
          */
         fun getRecentSelectedText(maxAgeMs: Long = DEFAULT_MAX_AGE_MS, currentPackage: String? = null): String? {
@@ -120,6 +114,44 @@ class SelectionAccessibilityService : AccessibilityService() {
             }
         }
 
+        fun clearConsumedSelectionAfterDelay(delayMs: Long = 2_500L) {
+            val service = activeService ?: return
+            val selectedAtSnapshot: Long
+            val selectedTextSnapshot: String?
+            synchronized(lock) {
+                if (!lastSelectionConsumed || lastSelectedText.isNullOrBlank()) return
+                selectedAtSnapshot = lastSelectedAtMs
+                selectedTextSnapshot = lastSelectedText
+            }
+            service.serviceScope.launch {
+                delay(delayMs)
+                synchronized(lock) {
+                    if (lastSelectionConsumed &&
+                        lastSelectedAtMs == selectedAtSnapshot &&
+                        lastSelectedText == selectedTextSnapshot
+                    ) {
+                        lastSelectedText = null
+                        lastSelectedAtMs = 0L
+                        lastSelectedPackage = null
+                        lastSelectionConsumed = false
+                        Log.d(SELECTION_TAG, "Selection cache cleared after successful translation")
+                    }
+                }
+            }
+        }
+
+        /** Prüft, ob [text] bereits als verbraucht markiert ist (Clipboard-Wiederverwendung verhindern). */
+        fun isTextConsumed(text: String): Boolean {
+            val ct = consumedText ?: return false
+            return text == ct
+        }
+
+        /** Markiert [text] als verbraucht, nachdem er erfolgreich übersetzt wurde. */
+        fun setConsumedText(text: String?) {
+            consumedText = text
+            Log.d(SELECTION_TAG, "setConsumedText: length=${text?.length ?: 0} consumed=${text != null}")
+        }
+
         fun addSystemUiWindowCallback(callback: () -> Unit) {
             systemUiCallbacks.add(callback)
         }
@@ -161,6 +193,7 @@ class SelectionAccessibilityService : AccessibilityService() {
                 lastSelectedAtMs = System.currentTimeMillis()
                 lastSelectedPackage = sourcePackage
                 lastSelectionConsumed = false
+                consumedText = null // neue Auswahl → alter verbrauchter Clipboard-Text ist ungültig
                 Log.d(SELECTION_TAG, "storeSelectedText: length=${normalized.length} pkg=$sourcePackage consumed=reset")
             }
         }
@@ -288,123 +321,10 @@ class SelectionAccessibilityService : AccessibilityService() {
         val text = node.text?.toString() ?: return null
         val start = node.textSelectionStart
         val end = node.textSelectionEnd
-        if (start < 0 || end < 0 || start == end) return null
-        val from = start.coerceAtMost(end).coerceIn(0, text.length)
-        val to = start.coerceAtLeast(end).coerceIn(0, text.length)
-        return text.substring(from, to).takeIf { it.isNotBlank() }
-    }
-
-    private fun copyCurrentSelectionToClipboardInternal(): Boolean {
-        if (clickCopyCommandInSelectionToolbar()) {
-            Log.d(SELECTION_TAG, "copyCurrentSelectionToClipboardInternal: toolbar copy clicked")
-            return true
-        }
-
-        for (root in collectWindowRoots()) {
-            val selectedNode = findSelectedNode(root)
-            val focusedNode = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-                ?: root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-            if (performCopy(selectedNode)
-                || performCopy(focusedNode)
-                || performCopy(findNodeWithCopyAction(root))
-                || performCopy(root)
-            ) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun clickCopyCommandInSelectionToolbar(): Boolean {
-        for (root in collectWindowRoots()) {
-            val copyNode = findCopyCommandNode(root)
-            if (copyNode != null && performClick(copyNode)) {
-                return true
-            }
-        }
-        Log.d(SELECTION_TAG, "clickCopyCommandInSelectionToolbar: no copy command found")
-        return false
-    }
-
-    private fun findCopyCommandNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-        if (node == null) return null
-        if (isCopyCommandNode(node)) return node
-        for (i in 0 until node.childCount) {
-            val found = findCopyCommandNode(node.getChild(i))
-            if (found != null) return found
-        }
-        return null
-    }
-
-    private fun isCopyCommandNode(node: AccessibilityNodeInfo): Boolean {
-        val text = node.text?.toString()?.trim()?.lowercase().orEmpty()
-        val desc = node.contentDescription?.toString()?.trim()?.lowercase().orEmpty()
-        val viewId = node.viewIdResourceName?.lowercase().orEmpty()
-        val labelMatches = text in setOf("copy", "kopieren") ||
-            desc in setOf("copy", "kopieren") ||
-            viewId.contains("copy") ||
-            viewId.contains("kopieren") ||
-            node.actionList.any { actionMatchesCopy(it) }
-        return labelMatches
-    }
-
-    private fun performClick(node: AccessibilityNodeInfo?): Boolean {
-        var current = node
-        while (current != null) {
-            try {
-                if (current.isClickable || current.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK }) {
-                    val clicked = current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                    Log.d(SELECTION_TAG, "performClick copy command clicked=$clicked")
-                    if (clicked) return true
-                }
-            } catch (e: Exception) {
-                Log.w(SELECTION_TAG, "performClick failed: ${e.message}")
-                return false
-            }
-            current = current.parent
-        }
-        return false
-    }
-
-    private fun findSelectedNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-        if (node == null) return null
-        if (!selectedTextFromNode(node).isNullOrBlank()) return node
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i)
-            val selected = findSelectedNode(child)
-            if (selected != null) return selected
-        }
-        return null
-    }
-
-    private fun performCopy(node: AccessibilityNodeInfo?): Boolean {
-        if (node == null) return false
-        return try {
-            val explicitCopyAction = node.actionList.firstOrNull { actionMatchesCopy(it) }
-            val actionId = explicitCopyAction?.id ?: AccessibilityNodeInfo.ACTION_COPY
-            val copied = node.performAction(actionId)
-            Log.d(SELECTION_TAG, "performCopy action=$actionId copied=$copied")
-            copied
-        } catch (e: Exception) {
-            Log.w(SELECTION_TAG, "ACTION_COPY failed: ${e.message}")
-            false
-        }
-    }
-
-    private fun findNodeWithCopyAction(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-        if (node == null) return null
-        if (node.actionList.any { actionMatchesCopy(it) }) return node
-        for (i in 0 until node.childCount) {
-            val found = findNodeWithCopyAction(node.getChild(i))
-            if (found != null) return found
-        }
-        return null
-    }
-
-    private fun actionMatchesCopy(action: AccessibilityNodeInfo.AccessibilityAction): Boolean {
-        if (action.id == AccessibilityNodeInfo.ACTION_COPY) return true
-        val label = action.label?.toString()?.trim()?.lowercase().orEmpty()
-        return label == "copy" || label == "kopieren"
+        if (start < 0 || end < 0 || start >= end) return null
+        if (start > text.length || end > text.length) return null
+        val safeEnd = end.coerceAtMost(start + MAX_SELECTED_TEXT_LENGTH)
+        return text.substring(start, safeEnd).trim().takeIf { it.isNotBlank() }
     }
 
     private fun collectWindowRoots(): List<AccessibilityNodeInfo> {

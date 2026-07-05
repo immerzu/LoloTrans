@@ -16,7 +16,7 @@ class LoloTransApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AppContext.init(this)
-        restoreBubbleIfNeeded()
+        // Bubble wird NICHT automatisch gestartet. User muss "Bubble starten" tippen.
     }
 
     private fun restoreBubbleIfNeeded() {

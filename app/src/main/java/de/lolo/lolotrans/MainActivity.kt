@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
         hasAccessibilityPermission = AccessibilityStatus.isSelectionServiceEnabled(this)
         persistAccessibilityApprovalIfActive()
         loadStoredAccessibilityApproval()
-        reconcileBubbleServiceState()
+        // Bubble wird NICHT automatisch gestartet. User muss "Bubble starten" tippen.
     }
 
     private fun startBubbleService() {

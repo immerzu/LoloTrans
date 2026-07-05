@@ -9,6 +9,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +60,9 @@ internal fun FlavorProviderSettings(
 
     DarkCard {
         SectionTitle(stringResource(R.string.section_telegram_login))
-        remember { TelegramTdlibClient.start(); true }
+        LaunchedEffect(Unit) {
+            TelegramTdlibClient.refreshAuthorizationState()
+        }
         val authStatus by TelegramTdlibClient.authStatus.collectAsStateWithLifecycle(
             initialValue = TelegramAuthStatus.Starting
         )

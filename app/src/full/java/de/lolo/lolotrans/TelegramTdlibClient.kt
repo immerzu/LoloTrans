@@ -41,6 +41,8 @@ object TelegramTdlibClient {
 
     @Volatile
     private var started = false
+    @Volatile
+    private var readyVerificationInFlight = false
     private var clientId: Int = 0
 
     fun start() {
@@ -48,11 +50,21 @@ object TelegramTdlibClient {
         synchronized(this) {
             if (started) return
             started = true
+            _authStatus.value = TelegramAuthStatus.Starting
             clientId = TdLib.createClientId()
             TdLib.execute("""{"@type":"setLogVerbosityLevel","new_verbosity_level":1}""")
             scope.launch { receiveLoop() }
-            sendRaw(JSONObject().put("@type", "getAuthorizationState"))
+            refreshAuthorizationState()
         }
+    }
+
+    fun refreshAuthorizationState() {
+        if (!started) {
+            start()
+            return
+        }
+        _authStatus.value = TelegramAuthStatus.Starting
+        sendRaw(JSONObject().put("@type", "getAuthorizationState"))
     }
 
     /**
@@ -70,19 +82,32 @@ object TelegramTdlibClient {
         } catch (_: Exception) {}
         val stopped = IllegalStateException("TDLib client stopped")
         pending.values.forEach { it.completeExceptionally(stopped) }
-        pending.clear()
-        job.cancel()
-        job = SupervisorJob()
-        clientId = 0
-        _authStatus.value = TelegramAuthStatus.Starting
-        Log.d(TD_TAG, "TDLib client stopped")
-    }
+            pending.clear()
+            job.cancel()
+            job = SupervisorJob()
+            clientId = 0
+            readyVerificationInFlight = false
+            _authStatus.value = TelegramAuthStatus.Starting
+            Log.d(TD_TAG, "TDLib client stopped")
+        }
 
     suspend fun submitPhoneNumber(phoneNumber: String): Result<Unit> {
         start()
         val normalized = phoneNumber.trim().replace(" ", "").replace("-", "")
         if (normalized.isBlank()) {
             return Result.failure(IllegalArgumentException("Telefonnummer fehlt."))
+        }
+        when (val status = awaitAuthStatusReady()) {
+            TelegramAuthStatus.WaitPhoneNumber -> Unit
+            TelegramAuthStatus.WaitCode -> return Result.success(Unit)
+            TelegramAuthStatus.WaitPassword -> return Result.failure(
+                IllegalStateException("Telegram wartet bereits auf das 2FA-Passwort.")
+            )
+            TelegramAuthStatus.Ready -> return Result.success(Unit)
+            is TelegramAuthStatus.Error -> return Result.failure(IllegalStateException(status.message))
+            TelegramAuthStatus.Starting -> return Result.failure(
+                IllegalStateException("Telegram-Authentifizierung ist noch nicht bereit.")
+            )
         }
         return sendForResult(
             JSONObject()
@@ -98,6 +123,20 @@ object TelegramTdlibClient {
         if (cleanCode.isBlank()) {
             return Result.failure(IllegalArgumentException("Telegram-Code fehlt."))
         }
+        when (val status = awaitAuthStatusReady()) {
+            TelegramAuthStatus.WaitCode -> Unit
+            TelegramAuthStatus.Ready -> return Result.success(Unit)
+            TelegramAuthStatus.WaitPhoneNumber -> return Result.failure(
+                IllegalStateException("Bitte zuerst die Telefonnummer senden.")
+            )
+            TelegramAuthStatus.WaitPassword -> return Result.failure(
+                IllegalStateException("Telegram wartet auf das 2FA-Passwort.")
+            )
+            is TelegramAuthStatus.Error -> return Result.failure(IllegalStateException(status.message))
+            TelegramAuthStatus.Starting -> return Result.failure(
+                IllegalStateException("Telegram-Authentifizierung ist noch nicht bereit.")
+            )
+        }
         return sendForResult(
             JSONObject()
                 .put("@type", "checkAuthenticationCode")
@@ -110,6 +149,20 @@ object TelegramTdlibClient {
         if (password.isBlank()) {
             return Result.failure(IllegalArgumentException("2FA-Passwort fehlt."))
         }
+        when (val status = awaitAuthStatusReady()) {
+            TelegramAuthStatus.WaitPassword -> Unit
+            TelegramAuthStatus.Ready -> return Result.success(Unit)
+            TelegramAuthStatus.WaitPhoneNumber -> return Result.failure(
+                IllegalStateException("Bitte zuerst die Telefonnummer senden.")
+            )
+            TelegramAuthStatus.WaitCode -> return Result.failure(
+                IllegalStateException("Bitte zuerst den Telegram-Code bestätigen.")
+            )
+            is TelegramAuthStatus.Error -> return Result.failure(IllegalStateException(status.message))
+            TelegramAuthStatus.Starting -> return Result.failure(
+                IllegalStateException("Telegram-Authentifizierung ist noch nicht bereit.")
+            )
+        }
         return sendForResult(
             JSONObject()
                 .put("@type", "checkAuthenticationPassword")
@@ -119,7 +172,7 @@ object TelegramTdlibClient {
 
     suspend fun translate(text: String, targetLanguage: String): Result<String> {
         start()
-        if (_authStatus.value != TelegramAuthStatus.Ready) {
+        if (awaitAuthStatusReady() != TelegramAuthStatus.Ready) {
             return Result.failure(IllegalStateException("Telegram ist noch nicht angemeldet."))
         }
         val normalizedText = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -235,6 +288,14 @@ object TelegramTdlibClient {
         return deferred.await()
     }
 
+    suspend fun awaitAuthStatusReady(timeoutMs: Long = 15_000): TelegramAuthStatus {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (_authStatus.value == TelegramAuthStatus.Starting && System.currentTimeMillis() < deadline) {
+            delay(50)
+        }
+        return _authStatus.value
+    }
+
     private fun sendRaw(request: JSONObject) {
         TdLib.send(clientId, request.toString())
     }
@@ -256,18 +317,40 @@ object TelegramTdlibClient {
     }
 
     private fun handleUpdate(event: JSONObject) {
-        if (event.optString("@type") != "updateAuthorizationState") return
-        handleAuthorizationState(event.optJSONObject("authorization_state") ?: return)
+        val type = event.optString("@type")
+        if (type == "updateAuthorizationState") {
+            handleAuthorizationState(event.optJSONObject("authorization_state") ?: return)
+            return
+        }
+        if (type.startsWith("authorizationState")) {
+            handleAuthorizationState(event)
+        }
     }
 
     private fun handleAuthorizationState(state: JSONObject) {
         when (val type = state.optString("@type")) {
-            "authorizationStateWaitTdlibParameters" -> sendTdlibParameters()
-            "authorizationStateWaitPhoneNumber" -> _authStatus.value = TelegramAuthStatus.WaitPhoneNumber
-            "authorizationStateWaitCode" -> _authStatus.value = TelegramAuthStatus.WaitCode
-            "authorizationStateWaitPassword" -> _authStatus.value = TelegramAuthStatus.WaitPassword
-            "authorizationStateReady" -> _authStatus.value = TelegramAuthStatus.Ready
+            "authorizationStateWaitTdlibParameters" -> {
+                Log.d(TD_TAG, "Telegram auth state: waitTdlibParameters")
+                sendTdlibParameters()
+            }
+            "authorizationStateWaitPhoneNumber" -> {
+                Log.d(TD_TAG, "Telegram auth state: waitPhoneNumber")
+                _authStatus.value = TelegramAuthStatus.WaitPhoneNumber
+            }
+            "authorizationStateWaitCode" -> {
+                Log.d(TD_TAG, "Telegram auth state: waitCode")
+                _authStatus.value = TelegramAuthStatus.WaitCode
+            }
+            "authorizationStateWaitPassword" -> {
+                Log.d(TD_TAG, "Telegram auth state: waitPassword")
+                _authStatus.value = TelegramAuthStatus.WaitPassword
+            }
+            "authorizationStateReady" -> {
+                Log.d(TD_TAG, "Telegram auth state: ready, verifying session")
+                verifyReadySession()
+            }
             "authorizationStateLoggingOut", "authorizationStateClosing", "authorizationStateClosed" -> {
+                Log.d(TD_TAG, "Telegram auth state: closing")
                 _authStatus.value = TelegramAuthStatus.Starting
             }
             else -> {
@@ -307,6 +390,31 @@ object TelegramTdlibClient {
                 .put("enable_storage_optimizer", true)
                 .put("ignore_file_names", true)
         )
+    }
+
+    private fun verifyReadySession() {
+        if (readyVerificationInFlight) return
+        readyVerificationInFlight = true
+        _authStatus.value = TelegramAuthStatus.Starting
+        scope.launch {
+            val result = sendForResult(JSONObject().put("@type", "getMe"))
+            readyVerificationInFlight = false
+            result.fold(
+                onSuccess = { user ->
+                    if (user.optString("@type") == "user") {
+                        Log.d(TD_TAG, "Telegram auth state: ready verified")
+                        _authStatus.value = TelegramAuthStatus.Ready
+                    } else {
+                        Log.w(TD_TAG, "Telegram ready verification returned type=${user.optString("@type")}")
+                        _authStatus.value = TelegramAuthStatus.WaitPhoneNumber
+                    }
+                },
+                onFailure = { error ->
+                    Log.w(TD_TAG, "Telegram ready verification failed: ${error.message}")
+                    _authStatus.value = TelegramAuthStatus.WaitPhoneNumber
+                }
+            )
+        }
     }
 
     private fun mapLanguageCode(code: String): String {
