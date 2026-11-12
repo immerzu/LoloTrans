@@ -2,6 +2,20 @@
 
 Stand: 2026-07-21 11:57:46 +02:00
 
+## Nachtrag 2026-11-12: committet und gepusht
+
+- Der Umbau aus diesem Dokument liegt als Commit `08958e49` (14 Dateien) auf `github/main`;
+  der lokale HEAD `5b02bb58` entspricht dem GitHub-Stand.
+- Zusaetzlich ergaenzt: `RELEASE_NOTES_v2.0.md` (fehlte) und die Pfadkorrektur auf
+  `F:\001_Coding_Projekte\LoloTrans` in `memory/FACT.md`.
+- `README.md`: Der Abschnitt „Hinweise" nennt jetzt den Bedienungshilfe-Dienst; die
+  SYSTEM_ALERT_WINDOW-Berechtigung wird nicht mehr verlangt.
+- Der Arbeitsbaum ist sauber. Die Aussagen weiter unten zu „nicht committen" und „kein Push"
+  beschreiben den Stand **vor** diesem Commit.
+- Offen bleiben: die manuellen Geraetetests aus Abschnitt 6 und GitHub-Releases fuer v2.0 bis
+  v2.2 — dafuer liegt keine signierte Release-APK vor.
+
+
 Dieses Dokument beschreibt den tatsaechlichen lokalen Arbeitsstand. Es ersetzt die
 fruehere, inzwischen veraltete Aussage, der Arbeitsbaum sei sauber.
 
