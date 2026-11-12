@@ -9,7 +9,7 @@
     <string name="privacy_notice">The app only translates copied text when you actively tap the visible bubble. The clipboard is not continuously monitored in the background. Depending on the selected translation service, text may be translated on-device or sent to the configured external service.</string>
 
     <!-- Permission -->
-    <string name="permission_status">Overlay permission</string>
+    <string name="permission_status">Accessibility service</string>
     <string name="permission_granted">Permission granted</string>
     <string name="permission_denied">Permission denied</string>
     <string name="grant_permission">Grant overlay permission</string>

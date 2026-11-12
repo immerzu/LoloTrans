@@ -1,8 +1,5 @@
 package de.lolo.lolotrans
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.ClipboardManager
 import android.content.Context
@@ -12,9 +9,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.os.IBinder
-import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -27,11 +22,11 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -44,7 +39,6 @@ class FloatingBubbleService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var translationManager: TranslationManager
-    private lateinit var overlayManager: TranslationOverlayManager
 
     // PNG-Alpha-Bounding-Box (einmalig analysiert, nie verändert)
     private var pngAlphaBounds: PngAlphaBounds? = null
@@ -54,6 +48,8 @@ class FloatingBubbleService : Service() {
     private var bubbleParams: WindowManager.LayoutParams? = null
     private var bubbleIcon: ImageView? = null
     private var isBubbleAttached = false
+    private var isStartingBubble = false
+    private var attachedOverlayContext: Context? = null
     private var currentBubbleSize = BubbleSize.M
     private var isStopping = false
 
@@ -80,9 +76,7 @@ class FloatingBubbleService : Service() {
     companion object {
         const val ACTION_START = "de.lolo.lolotrans.action.START_BUBBLE"
         const val ACTION_STOP = "de.lolo.lolotrans.action.STOP_BUBBLE"
-        const val EXTRA_SHOW_NOTIFICATION = "show_notification"
-        private const val NOTIFICATION_ID = 1001
-        private const val CHANNEL_ID = "translation_bubble_channel"
+        const val ACTION_REATTACH = "de.lolo.lolotrans.action.REATTACH_BUBBLE"
         private const val TRASH_SIZE_DP = 140
         private const val TRASH_HIT_TOLERANCE_DP = 10   // präzise, nur sanfte Hilfe
         private const val TRASH_HOVER_TOLERANCE_DP = 16 // optische Hervorhebung etwas früher
@@ -95,14 +89,11 @@ class FloatingBubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
         BubbleRuntimeState.setVisible(false)
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         settingsRepository = SettingsRepository(this)
         translationManager = TranslationManager()
-        overlayManager = TranslationOverlayManager(this, windowManager, settingsRepository)
         touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         Log.d(TAG, "touchSlop=$touchSlop (System)")
         pngAlphaBounds = analyzePngAlphaBounds(R.drawable.overlay_button_sw)
-        createNotificationChannel()
         startBubbleSizeObserver()
         // Clipboard-Inhalt beim Service-Start als Baseline markieren → nicht übersetzen
         markInitialClipboardAsConsumed()
@@ -115,18 +106,17 @@ class FloatingBubbleService : Service() {
                 requestStop(startId)
                 return START_NOT_STICKY
             }
+            ACTION_REATTACH -> {
+                Log.d(TAG, "Accessibility host reattach requested startId=$startId")
+                isStopping = false
+                reattachBubbleToCurrentHost()
+                return START_STICKY
+            }
             ACTION_START -> Log.d(TAG, "Start requested startId=$startId")
             else -> Log.d(TAG, "Start requested with unknown action=${intent?.action}")
         }
 
         isStopping = false
-        val showNotification = intent?.getBooleanExtra(EXTRA_SHOW_NOTIFICATION, false) ?: false
-        if (showNotification) {
-            Log.d(TAG, "startForeground: notificationId=$NOTIFICATION_ID")
-            startForeground(NOTIFICATION_ID, buildNotification())
-        } else {
-            Log.d(TAG, "startService: keine Foreground-Notification (Standard)")
-        }
         showBubble()
         return START_STICKY
     }
@@ -136,7 +126,6 @@ class FloatingBubbleService : Service() {
     override fun onDestroy() {
         Log.d(TAG, "onDestroy: cleanup started")
         cleanupOverlays()
-        overlayManager.destroy()
         translationManager.close()
         serviceScope.cancel()
         Log.d(TAG, "Bubble service destroyed")
@@ -160,18 +149,8 @@ class FloatingBubbleService : Service() {
     }
 
     private fun cleanupOverlays() {
-        stopForegroundSafely()
         removeBubble()
         hideTrashOverlay()
-        overlayManager.remove()
-    }
-
-    private fun stopForegroundSafely() {
-        try {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } catch (e: Exception) {
-            Log.w(TAG, "stopForeground ignored: ${e.message}")
-        }
     }
 
     private fun persistBubbleDisabledAsync() {
@@ -249,31 +228,71 @@ class FloatingBubbleService : Service() {
             Log.d(TAG, "Start ignored: stop in progress")
             return
         }
-        if (!Settings.canDrawOverlays(this)) {
-            Log.w(TAG, "Start failed: overlay permission missing")
-            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
-            persistBubbleDisabledAsync()
-            requestStop()
-            return
-        }
-        if (isBubbleAttached) {
-            Log.d(TAG, "Start ignored: bubble already attached")
+        if (isBubbleAttached || isStartingBubble) {
+            Log.d(TAG, "Start ignored: bubble already attached or starting")
             BubbleRuntimeState.setVisible(true)
             persistBubbleEnabledAsync()
             return
         }
 
+        isStartingBubble = true
         serviceScope.launch {
             try {
-                val size = settingsRepository.bubbleSize.first()
-                val posX = settingsRepository.getBubblePosX()
-                val posY = settingsRepository.getBubblePosY()
-                if (!isStopping) createBubbleView(size, posX, posY)
-            } catch (e: Exception) {
-                Log.w(TAG, "Start settings load failed, using fallback: ${e.message}")
-                if (!isStopping) createBubbleView(BubbleSize.M, 100, 200)
+                val overlayHost = awaitAccessibilityOverlayHost()
+                if (overlayHost == null) {
+                    Log.w(TAG, "Start failed: accessibility overlay host unavailable")
+                    Toast.makeText(
+                        this@FloatingBubbleService,
+                        R.string.accessibility_service_not_active,
+                        Toast.LENGTH_LONG
+                    ).show()
+                    persistBubbleDisabledAsync()
+                    requestStop()
+                    return@launch
+                }
+                this@FloatingBubbleService.windowManager = overlayHost.windowManager
+                attachedOverlayContext = overlayHost.context
+                try {
+                    val size = settingsRepository.bubbleSize.first()
+                    val posX = settingsRepository.getBubblePosX()
+                    val posY = settingsRepository.getBubblePosY()
+                    if (!isStopping) createBubbleView(size, posX, posY)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Start settings load failed, using fallback: ${e.message}")
+                    if (!isStopping) createBubbleView(BubbleSize.M, 100, 200)
+                }
+            } finally {
+                isStartingBubble = false
             }
         }
+    }
+
+    private fun reattachBubbleToCurrentHost() {
+        serviceScope.launch {
+            repeat(30) {
+                if (!isStartingBubble) return@repeat
+                delay(100)
+            }
+            if (isStartingBubble || isStopping) return@launch
+
+            val currentHost = SelectionAccessibilityService.getOverlayHost() ?: return@launch
+            if (isBubbleAttached && attachedOverlayContext === currentHost.context) {
+                Log.d(TAG, "Bubble already attached to current accessibility host")
+                return@launch
+            }
+
+            Log.d(TAG, "Reattaching bubble to current accessibility host")
+            cleanupOverlays()
+            showBubble()
+        }
+    }
+
+    private suspend fun awaitAccessibilityOverlayHost(): AccessibilityOverlayHost? {
+        repeat(15) {
+            SelectionAccessibilityService.getOverlayHost()?.let { return it }
+            delay(200)
+        }
+        return SelectionAccessibilityService.getOverlayHost()
     }
 
     private fun createBubbleView(size: BubbleSize, posX: Int, posY: Int) {
@@ -318,7 +337,7 @@ class FloatingBubbleService : Service() {
         bubbleParams = WindowManager.LayoutParams(
             touchPx,
             touchPx,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -361,6 +380,7 @@ class FloatingBubbleService : Service() {
         bubbleParams = null
         bubbleIcon = null
         isBubbleAttached = false
+        attachedOverlayContext = null
         BubbleRuntimeState.setVisible(false)
     }
 
@@ -536,7 +556,7 @@ class FloatingBubbleService : Service() {
         trashParams = WindowManager.LayoutParams(
             sizePx,
             sizePx,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -681,40 +701,6 @@ class FloatingBubbleService : Service() {
         } catch (e: Exception) {
             Log.w(TAG, "Could not mark initial clipboard baseline: ${e.message}")
         }
-    }
-
-    // ──────────────────────────────────────────────
-    //  Notification
-    // ──────────────────────────────────────────────
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply { description = getString(R.string.notification_channel_desc) }
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        }
-    }
-
-    private fun buildNotification(): android.app.Notification {
-        val largeIcon = BitmapFactory.decodeResource(resources, R.drawable.overlay_button_sw)
-        Log.d(TAG, "buildNotification: smallIcon=R.drawable.ic_notification_lolotrans channel=$CHANNEL_ID notificationId=$NOTIFICATION_ID largeIcon=${largeIcon.width}x${largeIcon.height}")
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification_lolotrans)
-            .setLargeIcon(largeIcon)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(getString(R.string.bubble_active))
-            .setOngoing(true)
-            .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setContentIntent(
-                PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            )
-            .build()
     }
 
     // ── PNG-Analyse (nur lesen, nie verändern) ──

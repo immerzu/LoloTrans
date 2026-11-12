@@ -2,7 +2,6 @@ package de.lolo.lolotrans
 
 import android.app.Application
 import android.content.Intent
-import android.provider.Settings
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,11 +24,6 @@ class LoloTransApplication : Application() {
                 val repo = SettingsRepository(this@LoloTransApplication)
                 val shouldRestore = repo.bubbleEnabled.first()
                 if (!shouldRestore) return@launch
-                if (!Settings.canDrawOverlays(this@LoloTransApplication)) {
-                    Log.w("LoloTransApplication", "Bubble restore skipped: overlay permission missing")
-                    repo.setBubbleEnabled(false)
-                    return@launch
-                }
                 if (!AccessibilityStatus.isSelectionServiceEnabled(this@LoloTransApplication)) {
                     Log.w("LoloTransApplication", "Bubble restore skipped: accessibility service disabled")
                     return@launch
@@ -45,4 +39,3 @@ class LoloTransApplication : Application() {
     }
 
 }
-

@@ -14,10 +14,14 @@ object AccessibilityStatus {
     }
 
     private fun isEnabledInSecureSettings(context: Context): Boolean {
-        val enabledServices = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
+        val enabledServices = try {
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+        } catch (_: Exception) {
+            null
+        } ?: return false
         val expected = ComponentName(context, SelectionAccessibilityService::class.java)
         val expectedFlat = expected.flattenToString()
         val expectedShort = expected.flattenToShortString()
@@ -29,7 +33,8 @@ object AccessibilityStatus {
                 return@any true
             }
             ComponentName.unflattenFromString(service)?.let { enabled ->
-                enabled.packageName == expected.packageName && enabled.className == expected.className
+                enabled.packageName == expected.packageName &&
+                    normalizedClassName(enabled) == normalizedClassName(expected)
             } == true
         }
     }
@@ -43,10 +48,17 @@ object AccessibilityStatus {
                 .any { info ->
                     val serviceInfo = info.resolveInfo?.serviceInfo ?: return@any false
                     serviceInfo.packageName == expected.packageName &&
-                        serviceInfo.name == expected.className
+                        normalizeClassName(serviceInfo.packageName, serviceInfo.name) ==
+                            normalizedClassName(expected)
                 }
         } catch (_: Exception) {
             false
         }
     }
+
+    private fun normalizedClassName(component: ComponentName): String =
+        normalizeClassName(component.packageName, component.className)
+
+    private fun normalizeClassName(packageName: String, className: String): String =
+        if (className.startsWith('.')) packageName + className else className
 }

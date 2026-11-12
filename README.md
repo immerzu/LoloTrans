@@ -18,7 +18,7 @@ immerzu (kesselflickerei@gmx.de)
 
 ## Funktionen
 
-- Floating-Bubble für schnelle Übersetzung aus der Zwischenablage
+- Floating-Bubble für schnelle Übersetzung aus der Zwischenablage oder aus markiertem Text
 - Quellsprache automatisch erkennen (ML Kit Language Identification)
 - On-Device-Übersetzung (ML Kit Translation) — keine Server-Anfrage, volle Privatsphäre
 - Übersetzung in einem frei verschiebbaren Overlay-Fenster
@@ -36,12 +36,12 @@ immerzu (kesselflickerei@gmx.de)
 - **Keine Tracker / Analytics / Werbung.** Die App enthält keinerlei Tracking-Bibliotheken.
 - **Kein externer Server.** Es werden keine Daten an externe Dienste gesendet.
 - **Internet-Zugriff** wird nur benötigt, um beim ersten Gebrauch eines Sprachpaares das ML-Kit-Sprachmodell herunterzuladen.
-- Android kann unabhängig eine Systemmeldung „Über anderen Apps anzeigen" einblenden — diese stammt von Android/SystemUI, nicht von LoloTrans.
+- **Bedienungshilfe statt Overlay-Berechtigung.** Bubble und Übersetzungsfenster laufen als Accessibility-Overlay; die Berechtigung SYSTEM_ALERT_WINDOW wird nicht mehr benötigt.
 
 ## Hinweise
 
 - Beim ersten Übersetzen eines Sprachpaares lädt ML Kit das benötigte Sprachmodell herunter. Danach laufen Übersetzungen schneller und vollständig lokal.
-- Die App benötigt die Overlay-Berechtigung (SYSTEM_ALERT_WINDOW), um die Bubble und das Übersetzungsfenster über anderen Apps anzuzeigen.
+- Die App benötigt einen aktiven Bedienungshilfe-Dienst (Accessibility Service), um Bubble und Übersetzungsfenster über anderen Apps anzuzeigen. Ohne ihn bleiben beide unsichtbar.
 - Die App verwendet **Google ML Kit** als Übersetzungs-Engine. ML Kit ist ein proprietäres Google-SDK.
 - **Offizielles F-Droid** ist wegen Google ML Kit aktuell nicht geeignet. **IzzyOnDroid** ist die realistischere Alternative, da dort GitHub-Release-APKs genutzt werden.
 

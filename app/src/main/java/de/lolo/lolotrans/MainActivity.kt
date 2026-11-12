@@ -3,8 +3,9 @@ package de.lolo.lolotrans
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -90,27 +91,34 @@ internal val BtnBorder = Color(0xFF666666)
 class MainActivity : ComponentActivity() {
 
     private lateinit var settingsRepository: SettingsRepository
-    private var hasOverlayPermission by mutableStateOf(false)
     private var hasAccessibilityPermission by mutableStateOf(false)
     private var hasAccessibilityApprovedOnce by mutableStateOf(false)
+    private val accessibilityStatusHandler = Handler(Looper.getMainLooper())
+    private var accessibilityStatusRefreshAttempts = 0
+    private val accessibilityStatusRefresh = object : Runnable {
+        override fun run() {
+            refreshAccessibilityStatus()
+            accessibilityStatusRefreshAttempts++
+            if (accessibilityStatusRefreshAttempts < ACCESSIBILITY_STATUS_REFRESH_ATTEMPTS) {
+                accessibilityStatusHandler.postDelayed(this, ACCESSIBILITY_STATUS_REFRESH_MS)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settingsRepository = SettingsRepository(this)
-        hasOverlayPermission = Settings.canDrawOverlays(this)
         hasAccessibilityPermission = AccessibilityStatus.isSelectionServiceEnabled(this)
         persistAccessibilityApprovalIfActive()
         loadStoredAccessibilityApproval()
-        Log.d(TAG, "onCreate: Overlay=$hasOverlayPermission")
+        Log.d(TAG, "onCreate: Accessibility=$hasAccessibilityPermission")
         enableEdgeToEdge()
 
         setContent {
             TranslatorAppTheme {
                 MainScreen(
                     settingsRepository = settingsRepository,
-                    hasOverlayPermission = hasOverlayPermission,
                     hasAccessibilityPermission = hasAccessibilityPermission,
-                    onGrantOverlayPermission = { openOverlaySettings() },
                     onGrantAccessibilityPermission = { openAccessibilitySettings() },
                     onStartBubble = { startBubbleService() },
                     onStopBubble = { stopBubbleService() }
@@ -121,20 +129,33 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        val newOverlay = Settings.canDrawOverlays(this)
-        Log.d(TAG, "onResume: Overlay=$hasOverlayPermission→$newOverlay")
-        hasOverlayPermission = newOverlay
         hasAccessibilityPermission = AccessibilityStatus.isSelectionServiceEnabled(this)
         persistAccessibilityApprovalIfActive()
         loadStoredAccessibilityApproval()
         // Bubble wird NICHT automatisch gestartet. User muss "Bubble starten" tippen.
     }
 
+    override fun onStart() {
+        super.onStart()
+        accessibilityStatusHandler.removeCallbacks(accessibilityStatusRefresh)
+        accessibilityStatusRefreshAttempts = 0
+        accessibilityStatusHandler.post(accessibilityStatusRefresh)
+    }
+
+    override fun onStop() {
+        accessibilityStatusHandler.removeCallbacks(accessibilityStatusRefresh)
+        super.onStop()
+    }
+
+    private fun refreshAccessibilityStatus() {
+        val enabled = AccessibilityStatus.isSelectionServiceEnabled(this)
+        if (enabled == hasAccessibilityPermission) return
+        hasAccessibilityPermission = enabled
+        if (enabled) persistAccessibilityApprovalIfActive()
+        Log.d(TAG, "Accessibility status changed: enabled=$enabled")
+    }
+
     private fun startBubbleService() {
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, R.string.permission_required, Toast.LENGTH_LONG).show()
-            return
-        }
         if (!AccessibilityStatus.isSelectionServiceEnabled(this)) {
             Toast.makeText(this, R.string.accessibility_permission_denied, Toast.LENGTH_LONG).show()
             return
@@ -144,11 +165,6 @@ class MainActivity : ComponentActivity() {
         }
         Log.d(TAG, "Bubble start requested")
         startService(intent)
-    }
-
-    private fun openOverlaySettings() {
-        startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")))
     }
 
     private fun openAccessibilitySettings() {
@@ -168,7 +184,6 @@ class MainActivity : ComponentActivity() {
             try {
                 val shouldRun = settingsRepository.bubbleEnabled.first()
                 if (shouldRun &&
-                    Settings.canDrawOverlays(this@MainActivity) &&
                     AccessibilityStatus.isSelectionServiceEnabled(this@MainActivity) &&
                     !BubbleRuntimeState.isVisible.value
                 ) {
@@ -203,15 +218,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private companion object {
+        const val ACCESSIBILITY_STATUS_REFRESH_MS = 750L
+        const val ACCESSIBILITY_STATUS_REFRESH_ATTEMPTS = 5
+    }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     settingsRepository: SettingsRepository,
-    hasOverlayPermission: Boolean,
     hasAccessibilityPermission: Boolean,
-    onGrantOverlayPermission: () -> Unit,
     onGrantAccessibilityPermission: () -> Unit,
     onStartBubble: () -> Unit,
     onStopBubble: () -> Unit
@@ -277,19 +295,6 @@ fun MainScreen(
             // --- Berechtigungsstatus ---
             DarkCard {
                 SectionTitle(stringResource(R.string.permission_status))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (hasOverlayPermission) "✓ ${stringResource(R.string.permission_granted)}"
-                        else "✗ ${stringResource(R.string.permission_denied)}",
-                        color = if (hasOverlayPermission) TextWhite else TextDim,
-                        fontSize = 15.sp
-                    )
-                }
-                if (!hasOverlayPermission) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    DarkButton(stringResource(R.string.grant_permission), onClick = onGrantOverlayPermission)
-                }
-                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = if (hasAccessibilityPermission) "✓ ${stringResource(R.string.accessibility_permission_granted)}"
                     else "✗ ${stringResource(R.string.accessibility_permission_denied)}",
@@ -319,7 +324,7 @@ fun MainScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     DarkButton(
                         stringResource(R.string.start_bubble),
-                        enabled = hasOverlayPermission && hasAccessibilityPermission && !bubbleVisible,
+                        enabled = hasAccessibilityPermission && !bubbleVisible,
                         onClick = {
                             onStartBubble()
                         },

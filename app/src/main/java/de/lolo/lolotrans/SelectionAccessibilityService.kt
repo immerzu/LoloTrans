@@ -1,24 +1,35 @@
 package de.lolo.lolotrans
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
+import android.content.Intent
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.WindowManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArraySet
 
 private const val SELECTION_TAG = "SelectionAccessibility"
+
+data class AccessibilityOverlayHost(
+    val context: Context,
+    val windowManager: WindowManager
+)
 
 class SelectionAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
         private const val MAX_SELECTED_TEXT_LENGTH = 10_000
+        private const val MAX_NODES_TO_SCAN = 250
         private const val DEFAULT_MAX_AGE_MS = 30_000L
         private val lock = Any()
 
@@ -37,6 +48,13 @@ class SelectionAccessibilityService : AccessibilityService() {
 
         fun isConnected(): Boolean = connected
 
+        fun getOverlayHost(): AccessibilityOverlayHost? {
+            if (!connected) return null
+            val service = activeService ?: return null
+            val manager = service.getSystemService(WINDOW_SERVICE) as? WindowManager ?: return null
+            return AccessibilityOverlayHost(service, manager)
+        }
+
         fun getCurrentSelectedText(): String? {
             val service = activeService
             if (service == null) {
@@ -45,8 +63,7 @@ class SelectionAccessibilityService : AccessibilityService() {
             }
             val root = service.rootInActiveWindow
             val rootPkg = try { root?.packageName?.toString() } catch (e: Exception) { "error" }
-            val result = service.collectSelectedTextFromAllWindows()
-                ?: service.collectSelectedText(root)
+            val result = service.collectSelectedText(root)
             if (result != null) {
                 Log.d(SELECTION_TAG, "getCurrentSelectedText: OK package=$rootPkg length=${result.length}")
             } else {
@@ -176,19 +193,6 @@ class SelectionAccessibilityService : AccessibilityService() {
                 if (normalized.isBlank()) {
                     return
                 }
-                val existing = lastSelectedText?.trim().orEmpty()
-                val samePackage = sourcePackage == null || lastSelectedPackage == null ||
-                    sourcePackage == lastSelectedPackage
-                val existingIsFresh = System.currentTimeMillis() - lastSelectedAtMs <= DEFAULT_MAX_AGE_MS
-                if (!lastSelectionConsumed && samePackage && existingIsFresh && existing.length > normalized.length) {
-                    val existingNorm = normalizeForCompare(existing)
-                    val normalizedNorm = normalizeForCompare(normalized)
-                    if (existingNorm.contains(normalizedNorm)) {
-                        lastSelectedAtMs = System.currentTimeMillis()
-                        Log.d(SELECTION_TAG, "storeSelectedText: keep longer cached selection existing=${existing.length} new=${normalized.length} pkg=$sourcePackage")
-                        return
-                    }
-                }
                 lastSelectedText = normalized
                 lastSelectedAtMs = System.currentTimeMillis()
                 lastSelectedPackage = sourcePackage
@@ -197,16 +201,12 @@ class SelectionAccessibilityService : AccessibilityService() {
                 Log.d(SELECTION_TAG, "storeSelectedText: length=${normalized.length} pkg=$sourcePackage consumed=reset")
             }
         }
-
-        private fun normalizeForCompare(text: String): String =
-            text.trim().lowercase().replace(Regex("\\s+"), " ")
     }
 
     override fun onCreate() {
         super.onCreate()
         activeService = this
-        connected = true
-        persistAccessibilityApprovedOnce()
+        connected = false
         Log.d(SELECTION_TAG, "Accessibility service created")
     }
 
@@ -216,6 +216,7 @@ class SelectionAccessibilityService : AccessibilityService() {
         connected = true
         persistAccessibilityApprovedOnce()
         Log.d(SELECTION_TAG, "Accessibility service connected")
+        restoreBubbleForConnectedHost()
     }
 
     override fun onDestroy() {
@@ -223,8 +224,24 @@ class SelectionAccessibilityService : AccessibilityService() {
             activeService = null
         }
         connected = false
+        BubbleRuntimeState.setVisible(false)
         serviceScope.cancel()
         super.onDestroy()
+    }
+
+    private fun restoreBubbleForConnectedHost() {
+        serviceScope.launch {
+            try {
+                val shouldRestore = SettingsRepository(applicationContext).bubbleEnabled.first()
+                if (!shouldRestore) return@launch
+                startService(Intent(this@SelectionAccessibilityService, FloatingBubbleService::class.java).apply {
+                    action = FloatingBubbleService.ACTION_REATTACH
+                })
+                Log.d(SELECTION_TAG, "Bubble reattach requested for connected accessibility host")
+            } catch (e: Exception) {
+                Log.w(SELECTION_TAG, "Bubble reattach request failed: ${e.message}")
+            }
+        }
     }
 
     private fun persistAccessibilityApprovedOnce() {
@@ -255,19 +272,29 @@ class SelectionAccessibilityService : AccessibilityService() {
         val pkg = event.packageName?.toString().orEmpty()
         val type = event.eventType
         val isSelection = type == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED
-        Log.d(SELECTION_TAG, "onAccessibilityEvent type=$type pkg=$pkg isSelection=$isSelection")
+        Log.d(
+            SELECTION_TAG,
+            "onAccessibilityEvent type=$type pkg=$pkg isSelection=$isSelection " +
+                "window=${event.windowId} class=${event.className ?: "?"} " +
+                "from=${event.fromIndex} to=${event.toIndex} items=${event.text.size}"
+        )
         if (notifySystemUiNavigationIfNeeded(event)) return
+        if (!isSelection) return
 
         val fromSource = collectSelectedText(event.source)
+        val fromEvent = extractSelectedTextFromEvent(event)
         val fromRoot = collectSelectedText(rootInActiveWindow)
+        val selected = listOfNotNull(fromSource, fromEvent, fromRoot)
+            .maxByOrNull { it.length }
 
-        val selected = when {
-            fromSource != null && fromRoot != null ->
-                if (fromRoot.length >= fromSource.length) fromRoot else fromSource
-            fromSource != null -> fromSource
-            fromRoot != null -> fromRoot
-            else -> extractSelectedTextFromEvent(event)
-        }
+        Log.d(
+            SELECTION_TAG,
+            "Selection candidates source=${fromSource?.length ?: 0} " +
+                "event=${fromEvent?.length ?: 0} root=${fromRoot?.length ?: 0} " +
+                "window=${event.windowId} class=${event.className ?: "?"} " +
+                "from=${event.fromIndex} to=${event.toIndex} " +
+                "itemLengths=${event.text.joinToString(",") { it?.length?.toString() ?: "0" }}"
+        )
 
         if (selected != null) {
             Log.d(SELECTION_TAG, "onAccessibilityEvent: selectedText length=${selected.length} pkg=$pkg")
@@ -289,32 +316,36 @@ class SelectionAccessibilityService : AccessibilityService() {
     }
 
     internal fun collectSelectedText(node: AccessibilityNodeInfo?): String? {
-        val values = linkedSetOf<String>()
-        collectSelectedText(node, values)
-        return values.joinToString("\n").takeIf { it.isNotBlank() }
-    }
-
-    private fun collectSelectedTextFromAllWindows(): String? {
-        val values = linkedSetOf<String>()
-        collectWindowRoots().forEach { root -> collectSelectedText(root, values) }
-        return values.joinToString("\n").takeIf { it.isNotBlank() }
-    }
-
-    private fun collectSelectedText(node: AccessibilityNodeInfo?, values: MutableSet<String>) {
-        if (node == null) return
-        try {
-            val direct = selectedTextFromNode(node)
-            if (!direct.isNullOrBlank()) {
-                values.add(direct)
+        if (node == null) return null
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        val selectedParts = linkedSetOf<String>()
+        var selectedLength = 0
+        queue.add(node)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_NODES_TO_SCAN) {
+            val current = queue.removeFirst()
+            visited++
+            try {
+                selectedTextFromNode(current)?.let { selected ->
+                    if (selectedLength < MAX_SELECTED_TEXT_LENGTH && selectedParts.add(selected)) {
+                        selectedLength += selected.length
+                    }
+                }
+                for (i in 0 until current.childCount) {
+                    current.getChild(i)?.let(queue::addLast)
+                }
+            } catch (e: Exception) {
+                Log.w(SELECTION_TAG, "Selection extraction failed: ${e.message}")
             }
-
-            for (i in 0 until node.childCount) {
-                val child = node.getChild(i)
-                collectSelectedText(child, values)
-            }
-        } catch (e: Exception) {
-            Log.w(SELECTION_TAG, "Selection extraction failed: ${e.message}")
         }
+        if (queue.isNotEmpty()) {
+            Log.w(SELECTION_TAG, "Selection scan stopped after $MAX_NODES_TO_SCAN nodes")
+        }
+        return selectedParts
+            .joinToString("\n")
+            .take(MAX_SELECTED_TEXT_LENGTH)
+            .trim()
+            .takeIf { it.isNotBlank() }
     }
 
     private fun selectedTextFromNode(node: AccessibilityNodeInfo): String? {
@@ -325,19 +356,6 @@ class SelectionAccessibilityService : AccessibilityService() {
         if (start > text.length || end > text.length) return null
         val safeEnd = end.coerceAtMost(start + MAX_SELECTED_TEXT_LENGTH)
         return text.substring(start, safeEnd).trim().takeIf { it.isNotBlank() }
-    }
-
-    private fun collectWindowRoots(): List<AccessibilityNodeInfo> {
-        val roots = mutableListOf<AccessibilityNodeInfo>()
-        try {
-            windows?.mapNotNullTo(roots) { it.root }
-        } catch (e: Exception) {
-            Log.w(SELECTION_TAG, "windows read failed: ${e.message}")
-        }
-        rootInActiveWindow?.let { root ->
-            if (roots.none { it === root }) roots.add(root)
-        }
-        return roots
     }
 
     private fun extractSelectedTextFromEvent(event: AccessibilityEvent): String? {

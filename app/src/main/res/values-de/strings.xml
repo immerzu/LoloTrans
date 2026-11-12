@@ -9,7 +9,7 @@
     <string name="privacy_notice">Die App übersetzt kopierten Text erst, wenn du aktiv auf die sichtbare Bubble tippst. Die Zwischenablage wird nicht dauerhaft im Hintergrund überwacht. Je nach ausgewähltem Übersetzungsdienst wird der Text lokal übersetzt oder an den konfigurierten externen Dienst gesendet.</string>
 
     <!-- Berechtigung -->
-    <string name="permission_status">Overlay-Berechtigung</string>
+    <string name="permission_status">Bedienungshilfe</string>
     <string name="permission_granted">Berechtigung erteilt</string>
     <string name="permission_denied">Berechtigung nicht erteilt</string>
     <string name="grant_permission">Overlay-Berechtigung erteilen</string>

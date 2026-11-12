@@ -6,7 +6,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.ViewGroup
@@ -339,17 +338,21 @@ class ClipboardTranslateActivity : Activity() {
     }
 
     private fun showTranslationOverlay(text: String): Boolean {
-        if (!Settings.canDrawOverlays(this)) {
-            Log.w(TAG, "Overlay permission missing, keeping result in dialog")
+        val overlayHost = SelectionAccessibilityService.getOverlayHost()
+        if (overlayHost == null) {
+            Log.w(TAG, "Accessibility overlay host unavailable, keeping result in dialog")
             showResultInDialog(text)
             return false
         }
         try {
-            val wm = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
             val repo = SettingsRepository(applicationContext)
             // Vorheriges Overlay entfernen (z.B. von einer vorherigen Activity-Instanz)
             activeOverlay?.remove()
-            val newOverlay = TranslationOverlayManager(applicationContext, wm, repo)
+            val newOverlay = TranslationOverlayManager(
+                overlayHost.context,
+                overlayHost.windowManager,
+                repo
+            )
             newOverlay.show(text)
             activeOverlay = newOverlay
             return true
