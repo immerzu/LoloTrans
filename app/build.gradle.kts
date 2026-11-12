@@ -31,8 +31,8 @@ android {
         applicationId = "de.lolo.lolotrans"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "2.2"
+        versionCode = 14
+        versionName = "2.3"
         buildConfigField("int", "TELEGRAM_API_ID", telegramApiId)
         buildConfigField("String", "TELEGRAM_API_HASH", "\"$telegramApiHash\"")
 
