@@ -9,7 +9,9 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 
 private const val TAG = "ScreenTextScanner"
@@ -33,7 +35,13 @@ object ScreenTextScanner {
     private const val MIN_MARK_HEIGHT = 16
     private const val MAX_BITMAP_SIDE = 2200
 
-    suspend fun recognizeMarkedText(context: Context, screenshot: Bitmap): String? {
+    suspend fun recognizeMarkedText(context: Context, screenshot: Bitmap): String? =
+        // Die Pixelanalyse ist rechenintensiv und darf den Hauptthread nicht blockieren.
+        withContext(Dispatchers.Default) {
+            recognizeMarkedTextBlocking(context, screenshot)
+        }
+
+    private suspend fun recognizeMarkedTextBlocking(context: Context, screenshot: Bitmap): String? {
         val cropped = try {
             val region = findMarkedRegion(screenshot) ?: run {
                 Log.w(TAG, "keine Markierung im Bildschirmfoto gefunden")

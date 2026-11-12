@@ -33,8 +33,6 @@ android {
         targetSdk = 35
         versionCode = 14
         versionName = "2.3"
-        buildConfigField("int", "TELEGRAM_API_ID", telegramApiId)
-        buildConfigField("String", "TELEGRAM_API_HASH", "\"$telegramApiHash\"")
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -46,6 +44,9 @@ android {
     productFlavors {
         create("full") {
             dimension = "distribution"
+            // Telegram-Zugangswerte NUR in diesem Flavor – nicht in fdroid/github (Audit LT-002).
+            buildConfigField("int", "TELEGRAM_API_ID", telegramApiId)
+            buildConfigField("String", "TELEGRAM_API_HASH", "\"$telegramApiHash\"")
             buildConfigField("boolean", "ML_KIT_AVAILABLE", "true")
             buildConfigField("boolean", "EXTERNAL_PROVIDER_AVAILABLE", "false")
             buildConfigField("String", "DEFAULT_PROVIDER", "\"ML_KIT\"")
