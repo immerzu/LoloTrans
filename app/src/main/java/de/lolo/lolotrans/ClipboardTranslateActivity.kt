@@ -179,22 +179,22 @@ class ClipboardTranslateActivity : Activity() {
         // 1. Markierten Text bevorzugen, Clipboard nur als Fallback.
         statusText.text = getString(R.string.translating_selection)
         val requestedText = readRequestedText()
-        Log.d(TAG, "readRequestedText: ${if (requestedText != null) "${requestedText.length} Zeichen" else "null"}")
+        Log.w(TAG, "readRequestedText: ${if (requestedText != null) "${requestedText.length} Zeichen" else "null"}")
         val textToTranslate = when {
             requestedText != null -> {
-                Log.d(TAG, "Verwende requestedText (${requestedText.length} Zeichen)")
+                Log.w(TAG, "Verwende requestedText (${requestedText.length} Zeichen)")
                 requestedText
             }
             else -> {
                 statusText.text = getString(R.string.translating_clipboard)
                 Log.w(TAG, "Keine Selection-Quelle → Clipboard-Fallback")
-                val clip = readClipboardText()
+                val clip = readClipboardTextWithRetry()
                 if (clip != null) {
                     if (SelectionAccessibilityService.isTextConsumed(clip)) {
-                        Log.d(TAG, "Clipboard-Fallback: Text bereits verbraucht → überspringe")
+                        Log.w(TAG, "Clipboard-Fallback: Text bereits verbraucht → überspringe")
                         null
                     } else {
-                        Log.d(TAG, "Clipboard-Fallback: ${clip.length} Zeichen")
+                        Log.w(TAG, "Clipboard-Fallback: ${clip.length} Zeichen")
                         clip
                     }
                 } else {
@@ -203,7 +203,7 @@ class ClipboardTranslateActivity : Activity() {
                 }
             }
         }
-        Log.d(TAG, "textToTranslate: ${if (textToTranslate != null) "${textToTranslate.length} Zeichen" else "null"}")
+        Log.w(TAG, "textToTranslate: ${if (textToTranslate != null) "${textToTranslate.length} Zeichen" else "null"}")
         Log.d(PERF, "textRead=${System.currentTimeMillis() - t}ms")
         t = System.currentTimeMillis()
         if (textToTranslate.isNullOrEmpty()) {
@@ -372,11 +372,30 @@ class ClipboardTranslateActivity : Activity() {
         closeButton.visibility = android.view.View.VISIBLE
     }
 
+    /**
+     * Liest die Zwischenablage mit kurzen Wiederholungen. Direkt nach dem Oeffnen der
+     * Activity ist der Zwischenablage-Inhalt gelegentlich noch nicht lesbar; ein einzelner
+     * Versuch fuehrte dann faelschlich zu "kein Text erkannt".
+     */
+    private suspend fun readClipboardTextWithRetry(): String? {
+        repeat(3) { attempt ->
+            readClipboardText()?.let { return it }
+            if (attempt < 2) delay(120)
+        }
+        Log.w(TAG, "Zwischenablage nach 3 Versuchen leer oder nicht lesbar")
+        return null
+    }
+
     private fun readClipboardText(): String? {
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = cm.primaryClip ?: return null
-        if (clip.itemCount == 0) return null
-        return clip.getItemAt(0).coerceToText(this)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        return try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+            val clip = cm.primaryClip ?: return null
+            if (clip.itemCount == 0) return null
+            clip.getItemAt(0).coerceToText(this)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Zwischenablage nicht lesbar: ${e.message}")
+            null
+        }
     }
 
     private fun readRequestedText(): String? {

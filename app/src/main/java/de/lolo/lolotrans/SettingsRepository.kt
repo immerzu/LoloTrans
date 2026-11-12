@@ -45,8 +45,9 @@ class SettingsRepository(private val context: Context) {
     }
 
     // --- Quellsprache ---
+    // Erster Start ohne gespeicherten Wert: automatische Erkennung.
     val sourceLanguage: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_SOURCE_LANGUAGE] ?: "en"
+        prefs[KEY_SOURCE_LANGUAGE] ?: "auto"
     }
 
     suspend fun setSourceLanguage(lang: String) {

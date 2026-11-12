@@ -9,7 +9,9 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -73,6 +75,15 @@ class FloatingBubbleService : Service() {
     private var isDragging = false
     private var touchSlop = 0
 
+    // Long-Press auf die Bubble -> Einstellungen (MainActivity)
+    private val longPressHandler = Handler(Looper.getMainLooper())
+    private var longPressTriggered = false
+    private val longPressRunnable = Runnable {
+        if (isDragging) return@Runnable
+        longPressTriggered = true
+        openSettingsFromBubble()
+    }
+
     companion object {
         const val ACTION_START = "de.lolo.lolotrans.action.START_BUBBLE"
         const val ACTION_STOP = "de.lolo.lolotrans.action.STOP_BUBBLE"
@@ -80,6 +91,7 @@ class FloatingBubbleService : Service() {
         private const val TRASH_SIZE_DP = 140
         private const val TRASH_HIT_TOLERANCE_DP = 10   // präzise, nur sanfte Hilfe
         private const val TRASH_HOVER_TOLERANCE_DP = 16 // optische Hervorhebung etwas früher
+        private const val LONG_PRESS_MS = 500L          // kurzer Tipp uebersetzt, Halten oeffnet Einstellungen
     }
 
     // ──────────────────────────────────────────────
@@ -125,6 +137,7 @@ class FloatingBubbleService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "onDestroy: cleanup started")
+        longPressHandler.removeCallbacks(longPressRunnable)
         cleanupOverlays()
         translationManager.close()
         serviceScope.cancel()
@@ -399,6 +412,8 @@ class FloatingBubbleService : Service() {
                 lastRawX = event.rawX
                 lastRawY = event.rawY
                 isDragging = false
+                longPressTriggered = false
+                longPressHandler.postDelayed(longPressRunnable, LONG_PRESS_MS)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -410,6 +425,7 @@ class FloatingBubbleService : Service() {
 
                 if (!isDragging && distance > touchSlop) {
                     isDragging = true
+                    longPressHandler.removeCallbacks(longPressRunnable)
                     Log.d(TAG, "Drag gestartet distance=$distance touchSlop=$touchSlop")
                     showTrashOverlay()
                 }
@@ -434,6 +450,17 @@ class FloatingBubbleService : Service() {
 
             // ACTION_UP und ACTION_CANCEL gleich behandeln
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                longPressHandler.removeCallbacks(longPressRunnable)
+
+                // ── Long-Press: Einstellungen wurden bereits geoeffnet, kein Tap ──
+                if (longPressTriggered) {
+                    longPressTriggered = false
+                    hideTrashOverlay()
+                    isDragging = false
+                    Log.d(TAG, "ACTION_UP nach Long-Press → keine Uebersetzung")
+                    return true
+                }
+
                 val dx = event.rawX - initialTouchX
                 val dy = event.rawY - initialTouchY
                 val distance = Math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
@@ -645,34 +672,83 @@ class FloatingBubbleService : Service() {
     // ──────────────────────────────────────────────
 
     /**
+     * Oeffnet bei langem Druecken auf die Bubble die Einstellungen (MainActivity).
+     * Der kurze Tipp bleibt unveraendert fuer das Uebersetzen.
+     */
+    private fun openSettingsFromBubble() {
+        Log.d(TAG, "Long-Press → Einstellungen oeffnen")
+        try {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Einstellungen konnten nicht geoeffnet werden", e)
+        }
+    }
+
+    /**
      * Startet die transparente ClipboardTranslateActivity, die im Vordergrund
      * zuverlässig die Zwischenablage liest und die Übersetzung durchführt.
      * Der direkte Clipboard-Zugriff aus dem Service-Kontext ist ab Android 12+
      * eingeschränkt und funktioniert nicht zuverlässig.
      */
     private fun handleBubbleClick() {
-        Log.d(TAG, "handleBubbleClick -> starte ClipboardTranslateActivity")
+        Log.d(TAG, "handleBubbleClick")
 
-        // 1. Internen Auswahltext-Cache bevorzugen.
         val currentPkg = SelectionAccessibilityService.getCurrentPackage()
         val checkedPkg = currentPkg?.takeUnless { it == packageName || it == "com.android.systemui" }
-        var selectedText = SelectionAccessibilityService.getRecentSelectedText(currentPackage = checkedPkg)
 
-        // 2. Falls der Cache leer ist, synchron aus dem aktuellen Accessibility-Baum lesen.
+        // 1. Markierter Text aus dem Accessibility-Baum (ohne die Zwischenablage anzufassen).
+        var selectedText = SelectionAccessibilityService.getTreeSelectedText()
+
+        // 2. Kurzlebiger Cache aus dem letzten Auswahl-Ereignis (max. 5 s alt).
         if (selectedText.isNullOrBlank()) {
-            selectedText = SelectionAccessibilityService.getCurrentSelectedText()
+            selectedText = SelectionAccessibilityService.getRecentSelectedText(
+                maxAgeMs = 5_000L,
+                currentPackage = checkedPkg
+            )
         }
 
-        // 3. Cache als verbraucht markieren, wenn er für diesen Bubble-Tap genutzt wird.
         if (!selectedText.isNullOrBlank()) {
+            Log.d(TAG, "Selection genutzt: ${selectedText.length} Zeichen")
             SelectionAccessibilityService.consumeSelection()
+            startTranslateActivity(selectedText)
+            return
         }
 
+        // 3. Frisch kopierter Text aus der Zwischenablage (zeichengenau, zuverlaessigster Weg).
+        //    Ein bereits uebersetzter Text gilt als alt und wird hier NICHT verwendet.
+        val clipboardText = SelectionAccessibilityService.getFreshClipboardText()
+        if (!clipboardText.isNullOrBlank()) {
+            Log.d(TAG, "Zwischenablage genutzt: ${clipboardText.length} Zeichen")
+            startTranslateActivity(clipboardText)
+            return
+        }
+
+        // 4. Keine Auswahl und kein neuer Zwischenablage-Text (WebView): Markierung im
+        //    Bildschirmfoto suchen. Liefert nichts, wenn keine Markierung erkennbar ist.
+        serviceScope.launch {
+            val screenText = SelectionAccessibilityService.getMarkedTextFromScreen()
+            if (!screenText.isNullOrBlank()) {
+                Log.d(TAG, "Bildschirm-Scan genutzt: ${screenText.length} Zeichen")
+                startTranslateActivity(screenText)
+            } else {
+                Log.d(TAG, "Kein Text gefunden → Fehlermeldung")
+                startTranslateActivity(null)
+            }
+        }
+    }
+
+    /** Startet die Uebersetzung; ohne Text entscheidet die Activity selbst (Zwischenablage). */
+    private fun startTranslateActivity(text: String?) {
         val intent = Intent(this, ClipboardTranslateActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
-            if (!selectedText.isNullOrBlank()) {
-                putExtra(ClipboardTranslateActivity.EXTRA_TEXT_TO_TRANSLATE, selectedText)
+            if (!text.isNullOrBlank()) {
+                putExtra(ClipboardTranslateActivity.EXTRA_TEXT_TO_TRANSLATE, text)
             }
         }
         try {
