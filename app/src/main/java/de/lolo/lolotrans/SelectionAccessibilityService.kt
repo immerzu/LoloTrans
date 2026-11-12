@@ -89,40 +89,6 @@ class SelectionAccessibilityService : AccessibilityService() {
             return service.collectSelectedText(root)?.takeIf { it.isNotBlank() }
         }
 
-        fun getCurrentSelectedText(): String? {
-            val service = activeService
-            if (service == null) {
-                Log.w(SELECTION_TAG, "getCurrentSelectedText: activeService is NULL")
-                return null
-            }
-            val root = service.rootInActiveWindow
-            val rootPkg = try { root?.packageName?.toString() } catch (e: Exception) { "error" }
-
-            // 1. Fokussiertes Feld: dort steht die echte Auswahl.
-            val focus = try { root?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) } catch (e: Exception) { null }
-            val fromFocus = service.collectSelectedText(focus)
-            if (!fromFocus.isNullOrBlank()) {
-                Log.d(SELECTION_TAG, "getCurrentSelectedText: OK (focus) package=$rootPkg length=${fromFocus.length}")
-                return fromFocus
-            }
-
-            // 2. Sonst der restliche Baum.
-            val fromRoot = service.collectSelectedText(root)
-            if (!fromRoot.isNullOrBlank()) {
-                Log.d(SELECTION_TAG, "getCurrentSelectedText: OK (root) package=$rootPkg length=${fromRoot.length}")
-                return fromRoot
-            }
-
-            // 3. Letzter Ausweg: Auswahl selbst kopieren lassen – liefert exakt den markierten Text.
-            val copied = service.copySelectionToClipboard()
-            if (!copied.isNullOrBlank()) {
-                Log.d(SELECTION_TAG, "getCurrentSelectedText: OK (copy) package=$rootPkg length=${copied.length}")
-                return copied
-            }
-
-            Log.w(SELECTION_TAG, "getCurrentSelectedText: NULL (package=$rootPkg, no selected text found)")
-            return null
-        }
 
         /**
          * Liefert den gecachten markierten Text, wenn:
@@ -471,96 +437,6 @@ class SelectionAccessibilityService : AccessibilityService() {
         }
     }
 
-    /**
-     * Laesst Android die aktuelle Auswahl selbst kopieren und liest die Zwischenablage.
-     * Das ist der einzige Weg zu exakt dem markierten Text; die Baumrekonstruktion kann
-     * Zeichen verlieren oder zu viel liefern. Die Zwischenablage wird dabei ueberschrieben.
-     */
-    private fun copySelectionToClipboard(): String? {
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        if (clipboard == null) {
-            Log.w(SELECTION_TAG, "copy: kein ClipboardManager")
-            return null
-        }
-        val root = try { rootInActiveWindow } catch (e: Exception) { null }
-        if (root == null) {
-            Log.w(SELECTION_TAG, "copy: rootInActiveWindow == null")
-            return null
-        }
-
-        val before = readClipboard(clipboard)
-        val webView = findNodeByClass(root, "android.webkit.WebView")
-        val webChildren = try { webView?.childCount ?: -1 } catch (e: Exception) { -1 }
-        Log.d(SELECTION_TAG, "copy: webview=${webView != null} childCount=$webChildren")
-        val copyTarget = findCopyTarget(root) ?: return null
-        val copyClass = copyTarget.className?.toString()
-        Log.d(
-            SELECTION_TAG,
-            "copy: root=${root.className} pkg=${root.packageName} target=$copyClass " +
-                "clipBefore=${before?.length ?: 0}"
-        )
-        val copied = try {
-            copyTarget.performAction(AccessibilityNodeInfo.ACTION_COPY)
-        } catch (e: Exception) {
-            Log.w(SELECTION_TAG, "ACTION_COPY failed: ${e.message}")
-            false
-        }
-        Log.d(SELECTION_TAG, "copy: performAction ACTION_COPY -> $copied on $copyClass")
-        if (!copied) {
-            Log.d(SELECTION_TAG, "copySelectionToClipboard: ACTION_COPY not supported")
-            return null
-        }
-
-        // Das System setzt die Zwischenablage kurz nach dem Aufruf.
-        repeat(CLIPBOARD_WAIT_TRIES) {
-            try {
-                Thread.sleep(CLIPBOARD_WAIT_STEP_MS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return null
-            }
-            val now = readClipboard(clipboard)
-            if (!now.isNullOrBlank() && now != before) {
-                return now.trim().take(MAX_SELECTED_TEXT_LENGTH).takeIf { it.isNotBlank() }
-            }
-        }
-        Log.d(SELECTION_TAG, "copySelectionToClipboard: clipboard unchanged")
-        return null
-    }
-
-    /**
-     * Sucht den Knoten, der ACTION_COPY sinnvoll entgegennimmt.
-     * WebView-Apps (Browser, RSS-Reader) melden Auswahl-Ereignisse ohne Text; der markierte
-     * Text steckt in virtuellen Knoten. Dort hilft ACTION_COPY auf dem WebView selbst.
-     */
-    private fun findCopyTarget(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        try {
-            root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.let { return it }
-        } catch (e: Exception) {
-            Log.w(SELECTION_TAG, "findFocus failed: ${e.message}")
-        }
-        findNodeByClass(root, "android.webkit.WebView")?.let { return it }
-        return root
-    }
-
-    private fun findNodeByClass(root: AccessibilityNodeInfo, className: String): AccessibilityNodeInfo? {
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        var visited = 0
-        while (queue.isNotEmpty() && visited < MAX_NODES_TO_SCAN) {
-            val node = queue.removeFirst()
-            visited++
-            try {
-                if (node.className?.toString() == className) return node
-                for (i in 0 until node.childCount) {
-                    node.getChild(i)?.let(queue::addLast)
-                }
-            } catch (e: Exception) {
-                Log.w(SELECTION_TAG, "class search failed: ${e.message}")
-            }
-        }
-        return null
-    }
 
     private fun readClipboard(clipboard: ClipboardManager): String? {
         return try {

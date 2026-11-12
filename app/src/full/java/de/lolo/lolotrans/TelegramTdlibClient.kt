@@ -240,10 +240,10 @@ object TelegramTdlibClient {
             val translated = parseTranslatedText(result)
             if (translated.isBlank()) {
                 Log.w(TD_TAG, "Empty Telegram translation result type=${result.optString("@type")} inputLength=${text.length}")
-                text
-            } else {
-                translated
+                // Leere Antwort ist ein Fehler, keine gueltige Uebersetzung.
+                throw IllegalStateException("Telegram lieferte keine Übersetzung.")
             }
+            translated
         }
     }
 
@@ -257,8 +257,9 @@ object TelegramTdlibClient {
     }
 
     private suspend fun sendForResult(request: JSONObject): Result<JSONObject> = withContext(Dispatchers.IO) {
+        var extra: String? = null
         try {
-            val extra = extraCounter.getAndIncrement().toString()
+            extra = extraCounter.getAndIncrement().toString()
             request.put("@extra", extra)
             val deferred = CompletableDeferred<JSONObject>()
             pending[extra] = deferred
@@ -271,6 +272,9 @@ object TelegramTdlibClient {
             }
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            // Auch bei Zeitueberschreitung oder Fehler darf kein Eintrag zurueckbleiben.
+            extra?.let { pending.remove(it) }
         }
     }
 

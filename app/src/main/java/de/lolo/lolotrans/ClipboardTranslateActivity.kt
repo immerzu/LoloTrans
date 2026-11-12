@@ -188,7 +188,7 @@ class ClipboardTranslateActivity : Activity() {
             else -> {
                 statusText.text = getString(R.string.translating_clipboard)
                 Log.w(TAG, "Keine Selection-Quelle → Clipboard-Fallback")
-                val clip = readClipboardTextWithRetry()
+                val clip = readClipboardTextWithRetry()?.take(MAX_TRANSLATE_TEXT_LENGTH)
                 if (clip != null) {
                     if (SelectionAccessibilityService.isTextConsumed(clip)) {
                         Log.w(TAG, "Clipboard-Fallback: Text bereits verbraucht → überspringe")

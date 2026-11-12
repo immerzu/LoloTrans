@@ -80,6 +80,15 @@ object ScreenTextScanner {
     /** Sucht die groesste zusammenhaengende blau hinterlegte Flaeche (die Markierung). */
     private fun findMarkedRegion(bitmap: Bitmap): Rect? {
         val scaled = scaleDown(bitmap)
+        try {
+            return findMarkedRegionIn(scaled, bitmap)
+        } finally {
+            // Die herunterskalierte Kopie wird nur fuer die Suche gebraucht.
+            if (scaled !== bitmap) scaled.recycle()
+        }
+    }
+
+    private fun findMarkedRegionIn(scaled: Bitmap, original: Bitmap): Rect? {
         val w = scaled.width
         val h = scaled.height
         val pixels = IntArray(w * h)
@@ -130,18 +139,18 @@ object ScreenTextScanner {
         if (bestArea < 400) return null
         if (rect.width() < MIN_MARK_WIDTH || rect.height() < MIN_MARK_HEIGHT) return null
 
-        val sx = bitmap.width.toFloat() / w
-        val sy = bitmap.height.toFloat() / h
+        val sx = original.width.toFloat() / w
+        val sy = original.height.toFloat() / h
         val pad = 10
         val left = (rect.left * sx).toInt().coerceAtLeast(0)
         val top = (rect.top * sy).toInt().coerceAtLeast(0)
-        val right = (rect.right * sx).toInt().coerceAtMost(bitmap.width)
-        val bottom = (rect.bottom * sy).toInt().coerceAtMost(bitmap.height)
+        val right = (rect.right * sx).toInt().coerceAtMost(original.width)
+        val bottom = (rect.bottom * sy).toInt().coerceAtMost(original.height)
         return Rect(
             (left - pad).coerceAtLeast(0),
             (top - pad).coerceAtLeast(0),
-            (right + pad).coerceAtMost(bitmap.width),
-            (bottom + pad).coerceAtMost(bitmap.height)
+            (right + pad).coerceAtMost(original.width),
+            (bottom + pad).coerceAtMost(original.height)
         )
     }
 

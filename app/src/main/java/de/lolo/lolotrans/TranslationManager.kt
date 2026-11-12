@@ -45,7 +45,9 @@ class TranslationManager(
             "auto", "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru",
             "uk", "tr", "ar", "zh", "ja", "ko", "hi", "th", "vi", "sv",
             "ro", "no", "da", "fi", "cs", "el", "hu", "id", "ms",
-            "sk", "bg", "hr", "ca", "he"
+            "sk", "bg", "hr", "ca", "he",
+            // Norwegische Varianten, die die Spracherkennung liefern kann (ML Kit: nb, nn)
+            "nb", "nn"
         )
 
         @JvmStatic

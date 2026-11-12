@@ -202,8 +202,8 @@ class TranslationOverlayManager(
         // Karte im Root positionieren
         val cardLp = FrameLayout.LayoutParams(cardWidth, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.TOP or Gravity.START
-            leftMargin = posX.coerceIn(0, getScreenWidth() - cardWidth)
-            topMargin = posY.coerceIn(0, getScreenHeight())
+            leftMargin = posX.coerceIn(0, (getScreenWidth() - cardWidth).coerceAtLeast(0))
+            topMargin = posY.coerceIn(0, (getScreenHeight() - dpToPx(200)).coerceAtLeast(0))
         }
         parent.addView(container, cardLp)
         containerParams = cardLp
@@ -299,9 +299,9 @@ class TranslationOverlayManager(
                 if (dx > 10f || dy > 10f) isDragging = true
                 if (isDragging) {
                     val newLeft = (initialCardLeft + (event.rawX - initialTouchX).toInt())
-                        .coerceIn(0, getScreenWidth() - cardParams.width)
+                        .coerceIn(0, (getScreenWidth() - cardParams.width).coerceAtLeast(0))
                     val newTop = (initialCardTop + (event.rawY - initialTouchY).toInt())
-                        .coerceIn(0, getScreenHeight())
+                        .coerceIn(0, (getScreenHeight() - cardParams.height).coerceAtLeast(0))
                     cardParams.leftMargin = newLeft
                     cardParams.topMargin = newTop
                     // Layout im Parent FrameLayout aktualisieren

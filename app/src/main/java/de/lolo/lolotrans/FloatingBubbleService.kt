@@ -448,8 +448,17 @@ class FloatingBubbleService : Service() {
                 return true
             }
 
-            // ACTION_UP und ACTION_CANCEL gleich behandeln
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            // Vom System abgebrochene Geste: nur aufraeumen, keine Uebersetzung, kein Drop.
+            MotionEvent.ACTION_CANCEL -> {
+                longPressHandler.removeCallbacks(longPressRunnable)
+                longPressTriggered = false
+                hideTrashOverlay()
+                isDragging = false
+                Log.d(TAG, "ACTION_CANCEL → keine Aktion")
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
                 longPressHandler.removeCallbacks(longPressRunnable)
 
                 // ── Long-Press: Einstellungen wurden bereits geoeffnet, kein Tap ──

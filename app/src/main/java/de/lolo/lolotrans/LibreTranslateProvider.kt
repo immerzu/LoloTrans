@@ -93,7 +93,8 @@ class LibreTranslateProvider(
         }
         try {
             val testUrl = URL("$baseUrl/languages")
-            val conn = openConnection(testUrl, getApiKey()) ?: return@withContext Result.failure(
+            // LibreTranslate stellt /languages ausschliesslich per GET bereit.
+            val conn = openConnection(testUrl, getApiKey(), method = "GET") ?: return@withContext Result.failure(
                 IllegalStateException("Server nicht erreichbar."))
             val code = conn.responseCode
             if (code != 200) {
@@ -169,7 +170,7 @@ class LibreTranslateProvider(
 
     override fun close() {}
 
-    private fun openConnection(url: URL, apiKey: String): HttpURLConnection? {
+    private fun openConnection(url: URL, apiKey: String, method: String = "POST"): HttpURLConnection? {
         val conn = try {
             url.openConnection() as HttpURLConnection
         } catch (e: Exception) {
@@ -178,7 +179,7 @@ class LibreTranslateProvider(
         }
         conn.connectTimeout = CONNECT_TIMEOUT_MS
         conn.readTimeout = READ_TIMEOUT_MS
-        conn.requestMethod = "POST"
+        conn.requestMethod = method
         conn.setRequestProperty("Content-Type", "application/json")
         conn.setRequestProperty("Accept", "application/json")
         if (apiKey.isNotBlank()) {
