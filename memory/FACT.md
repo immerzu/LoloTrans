@@ -5,7 +5,7 @@
 - Vor jedem Release die APK aus `app/build/outputs/apk/debug/app-debug.apk` dorthin kopieren
 - Versionierung: `versionCode` und `versionName` in `app/build.gradle.kts` vor Release hochzählen
 - **Jede neue Ausgabe bekommt eine hochgezählte Version**
-- Aktueller Stand: versionCode=15, versionName="2.4" (Stand 2026-11-22)
+- Aktueller Stand: versionCode=16, versionName="2.5" (Stand 2026-11-22)
 - Hinweis: Ausgabeordner laut FACT.md zeigt `F:\DeepSeek\Projekte\...`; tatsächlich liegt `Ausgabe/` im Projektordner `F:/001_Coding_Projekte/LoloTrans/Ausgabe/` (bei nächster Release-Kopie Pfad prüfen).
 
 # Übersetzungsweg der Bubble (festgelegt 2026-11-22)
@@ -26,7 +26,7 @@
 - LoloTrans **ist im offiziellen F-Droid** (`fdroid`-Flavor, ohne ML Kit): https://f-droid.org/de/packages/de.lolo.lolotrans/
 - Veröffentlichte Versionen: 2.0/11 (28.05.2026), 2.1/12 (03.06.2026), 2.2/13 (05.07.2026); `suggestedVersionCode` = 13, APK 9 MiB, arm64-v8a + armeabi-v7a, minSdk 26.
 - Reproduzierbare Builds: alle drei ✔ (Verifikation 2.2 am 11.09.2026).
-- fdroiddata: `metadata/de.lolo.lolotrans.yml`, Builds 11/12/13 mit Commit-SHAs, AutoUpdateMode `Version`, UpdateCheckMode `Tags`. Kein Build für 2.3/14 und 2.4/15 (Stand 2026-11-22).
+- fdroiddata: `metadata/de.lolo.lolotrans.yml`, Builds 11/12/13 mit Commit-SHAs, AutoUpdateMode `Version`, UpdateCheckMode `Tags`. Kein Build für 2.3/14, 2.4/15 und 2.5/16 (Stand 2026-11-22). Lokale Kopie `fdroid/de.lolo.lolotrans.yml` steht auf 2.5/16 und ist **nicht eingereicht** — es ist keine F-Droid-Veröffentlichung gewünscht.
 - **IzzyOnDroid: kein Eintrag** (`apt.izzysoft.de/.../de.lolo.lolotrans` → 404).
 - Die 2.2-APK stammt aus Commit `11715eaa` (Tag `v2.2`) und enthält noch SYSTEM_ALERT_WINDOW + Foreground-Dienst `specialUse`; der Accessibility-Overlay-Umbau (`08958e49`) ist **nicht** veröffentlicht.
 - Lokale Kopie `fdroid/de.lolo.lolotrans.yml` weicht von fdroiddata ab (Commit als Tag-Name, andere Summary/Description) — nicht die Quelle des veröffentlichten Builds.
