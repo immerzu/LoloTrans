@@ -1,5 +1,8 @@
 # LoloTrans v2.2 Arbeitsstand - Accessibility-Overlay, Selection-Cache und Yandex-Grenze
 
+> **Historisch.** Aktueller Stand: `HANDOVER_20261122.md`. Dieses Dokument beschreibt den Umbau
+> vom 21.07.2026 samt Nachtrag vom 12.11.2026 und bleibt als Beleg erhalten.
+
 Stand: 2026-07-21 11:57:46 +02:00
 
 ## Nachtrag 2026-11-12: committet und gepusht

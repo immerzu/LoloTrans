@@ -1,5 +1,11 @@
 # IzzyOnDroid submission — LoloTrans
 
+> **Überholt (Stand 22.11.2026).** Die Angaben unten beziehen sich auf 1.8/9. Aktuell ist 2.4/15
+> (`HANDOVER_20261122.md`). Wichtig: Für IzzyOnDroid kommt **nur** der `fdroid`- oder
+> `github`-Flavor in Frage — der `full`-Flavor (Telegram/ML Kit) darf nie veröffentlicht werden,
+> weil er die Telegram-Zugangswerte als BuildConfig-Konstanten enthält. Ein IzzyOnDroid-Antrag
+> besteht derzeit nicht.
+
 ## App details
 
 | Field | Value |

@@ -42,6 +42,8 @@ class ClipboardTranslateActivity : Activity() {
     companion object {
         const val EXTRA_TEXT_TO_TRANSLATE = "de.lolo.lolotrans.extra.TEXT_TO_TRANSLATE"
         const val MAX_TRANSLATE_TEXT_LENGTH = 100_000
+        // OCR-Artefakte aus Bildschirmfotos (z. B. Ziffern aus einem Bild) sind kuerzer.
+        private const val MIN_SCREEN_SCAN_TEXT_LENGTH = 3
         private const val TAG = "ClipboardActivity"
         private const val PERF = "Perf"
 
@@ -189,17 +191,24 @@ class ClipboardTranslateActivity : Activity() {
                 statusText.text = getString(R.string.translating_clipboard)
                 Log.w(TAG, "Keine Selection-Quelle → Clipboard-Fallback")
                 val clip = readClipboardTextWithRetry()?.take(MAX_TRANSLATE_TEXT_LENGTH)
-                if (clip != null) {
-                    if (SelectionAccessibilityService.isTextConsumed(clip)) {
+                when {
+                    clip == null -> {
+                        // Kein Text in der Zwischenablage: letzter Ausweg Bildschirm-Scan
+                        // (nur im full-Flavor verfuegbar, sonst null).
+                        Log.w(TAG, "Clipboard leer → Bildschirm-Scan als letzter Ausweg")
+                        statusText.text = getString(R.string.translating_selection)
+                        SelectionAccessibilityService.getMarkedTextFromScreen()
+                            ?.trim()
+                            ?.takeIf { it.length >= MIN_SCREEN_SCAN_TEXT_LENGTH }
+                    }
+                    SelectionAccessibilityService.isTextConsumed(clip) -> {
                         Log.w(TAG, "Clipboard-Fallback: Text bereits verbraucht → überspringe")
                         null
-                    } else {
+                    }
+                    else -> {
                         Log.w(TAG, "Clipboard-Fallback: ${clip.length} Zeichen")
                         clip
                     }
-                } else {
-                    Log.w(TAG, "Clipboard-Fallback: nichts in der Zwischenablage")
-                    null
                 }
             }
         }

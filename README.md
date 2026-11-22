@@ -19,8 +19,8 @@ immerzu (kesselflickerei@gmx.de)
 ## Funktionen
 
 - Floating-Bubble für schnelle Übersetzung aus der Zwischenablage oder aus markiertem Text
-- Quellsprache automatisch erkennen (ML Kit Language Identification)
-- On-Device-Übersetzung (ML Kit Translation) — keine Server-Anfrage, volle Privatsphäre
+- Quellsprache automatisch erkennen (im `full`-Flavor über ML Kit, sonst über den gewählten Dienst)
+- Übersetzung wahlweise on-device (ML Kit, `full`) oder über einen eigenen LibreTranslate-Server
 - Übersetzung in einem frei verschiebbaren Overlay-Fenster
 - Bubble-Größen: XS / S / M / L / XL
 - Bubble verschieben und per Drag-to-Trash schließen
@@ -32,10 +32,12 @@ immerzu (kesselflickerei@gmx.de)
 ## Datenschutz
 
 - **Keine heimliche Clipboard-Überwachung.** Die App liest die Zwischenablage nur, wenn du aktiv die Bubble antippst.
-- **Keine Internet-Übertragung.** Die Übersetzung läuft komplett auf dem Gerät (ML Kit On-Device Translation).
+- **`full`-Flavor (ML Kit):** Die Übersetzung läuft komplett auf dem Gerät. Internet wird nur benötigt,
+  um beim ersten Gebrauch eines Sprachpaares das ML-Kit-Sprachmodell herunterzuladen.
+- **`fdroid`- und `github`-Flavor:** Der Text wird an den Übersetzungsdienst gesendet, den du
+  eingestellt hast (LibreTranslate-URL bzw. FreeTranslations). Ohne konfigurierten Dienst wird nichts
+  übertragen, weil dann nicht übersetzt wird.
 - **Keine Tracker / Analytics / Werbung.** Die App enthält keinerlei Tracking-Bibliotheken.
-- **Kein externer Server.** Es werden keine Daten an externe Dienste gesendet.
-- **Internet-Zugriff** wird nur benötigt, um beim ersten Gebrauch eines Sprachpaares das ML-Kit-Sprachmodell herunterzuladen.
 - **Bedienungshilfe statt Overlay-Berechtigung.** Bubble und Übersetzungsfenster laufen als Accessibility-Overlay; die Berechtigung SYSTEM_ALERT_WINDOW wird nicht mehr benötigt.
 
 ## Hinweise

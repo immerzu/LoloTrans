@@ -21,18 +21,17 @@ before_script:
 build_debug:
   stage: build
   script:
-    - ./gradlew assembleFullDebug assembleFdroidDebug --stacktrace
+    - ./gradlew assembleFdroidDebug --stacktrace
   artifacts:
     when: on_success
     expire_in: 7 days
     paths:
-      - app/build/outputs/apk/full/debug/
       - app/build/outputs/apk/fdroid/debug/
 
 lint_debug:
   stage: lint
   script:
-    - ./gradlew lintFullDebug lintFdroidDebug --stacktrace
+    - ./gradlew lintFdroidDebug --stacktrace
   artifacts:
     when: on_success
     expire_in: 7 days

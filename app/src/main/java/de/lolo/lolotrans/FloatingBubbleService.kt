@@ -737,18 +737,13 @@ class FloatingBubbleService : Service() {
             return
         }
 
-        // 4. Keine Auswahl und kein neuer Zwischenablage-Text (WebView): Markierung im
-        //    Bildschirmfoto suchen. Liefert nichts, wenn keine Markierung erkennbar ist.
-        serviceScope.launch {
-            val screenText = SelectionAccessibilityService.getMarkedTextFromScreen()
-            if (!screenText.isNullOrBlank()) {
-                Log.d(TAG, "Bildschirm-Scan genutzt: ${screenText.length} Zeichen")
-                startTranslateActivity(screenText)
-            } else {
-                Log.d(TAG, "Kein Text gefunden → Fehlermeldung")
-                startTranslateActivity(null)
-            }
-        }
+        // 4. Kein im Service lesbarer Zwischenablage-Text: Der Service hat keinen Fensterfokus,
+        //    ab Android 10 ist das Clipboard dort oft nicht lesbar. Die Activity hat den Fokus
+        //    und liest die Zwischenablage zuverlaessig; sie greift nur dann auf den
+        //    Bildschirm-Scan zurueck, wenn auch dort kein Text liegt.
+        //    Ziel dieses Weges: kopierter Text wird uebersetzt (nicht ein Bildschirm-Artefakt).
+        Log.d(TAG, "Keine Selection und kein Service-Clipboard → Activity liest Zwischenablage")
+        startTranslateActivity(null)
     }
 
     /** Startet die Uebersetzung; ohne Text entscheidet die Activity selbst (Zwischenablage). */
